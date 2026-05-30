@@ -1,5 +1,5 @@
 /*
- * G-COFFEE — Hệ Thống Quản Lý Quán Cà Phê
+ * ITF COFFEE — Hệ Thống Quản Lý Quán Cà Phê
  * Giao diện đồ họa Raylib — Full Vietnamese Support
  *
  * BIÊN DỊCH:
@@ -36,6 +36,8 @@
 
 #define WIN_W        1280
 #define WIN_H        800
+#define WW GetScreenWidth()
+#define WH GetScreenHeight()
 #define SIDEBAR_W    230
 #define TOPBAR_H     56
 #define FPS          60
@@ -92,7 +94,6 @@ static Staff   *gCurrentStaff = NULL;
 /* ═══════════════════════════════════════
    WHITE • BLUE • PINK THEME
 ═══════════════════════════════════════ */
-
 /* Background */
 #define CB_BG          CLITERAL(Color){245,248,255,255}
 #define CB_PANEL       CLITERAL(Color){255,255,255,255}
@@ -599,8 +600,8 @@ static void updateScroll(Rectangle area, float contentH) {
 ═══════════════════════════════════════════════════════════════════ */
 static void drawSidebar(void) {
     int sw = SIDEBAR_W;
-    DrawRectangle(0, 0, sw, WIN_H, CB_SIDEBAR);
-    DrawRectangle(sw-1, 0, 1, WIN_H, CB_BORDER);
+    DrawRectangle(0, 0, sw, WH, CB_SIDEBAR);
+    DrawRectangle(sw-1, 0, 1, WH, CB_BORDER);
 
     /* ── Logo / Header ── */
     DrawRectangle(0, 0, sw, 108, CB_BG);
@@ -620,8 +621,8 @@ static void drawSidebar(void) {
                    (Color){255,150,210,90});
     }
     /* title */
-    Vector2 tv = MeasureB("G-COFFEE", 20);
-    DrawTextEx(gFontB, "G-COFFEE", (Vector2){(sw-tv.x)*.5f, 62.f}, 20.f, 1.f, CA_GOLD);
+    Vector2 tv = MeasureB("ITF COFFEE", 20);
+    DrawTextEx(gFontB, "ITF COFFEE", (Vector2){(sw-tv.x)*.5f, 62.f}, 20.f, 1.f, CA_GOLD);
     Vector2 sv = Measure("Quản Lý Quán", 11);
     DrawTxtL("Quản Lý Quán", (sw-sv.x)*.5f, 86.f, 11.f, CT_DIM);
 
@@ -683,7 +684,7 @@ static void drawSidebar(void) {
 
     /* version */
     Vector2 vv = Measure("v2.0  Raylib", 10);
-    DrawTxtL("v2.0  Raylib", (sw-vv.x)*.5f, WIN_H-16.f, 10.f, CT_DIM);
+    DrawTxtL("v2.0  Raylib", (sw-vv.x)*.5f, WH-16.f, 10.f, CT_DIM);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -691,8 +692,8 @@ static void drawSidebar(void) {
 ═══════════════════════════════════════════════════════════════════ */
 static void drawTopBar(const char *title) {
     int ax = SIDEBAR_W;
-    DrawRectangle(ax, 0, WIN_W-ax, TOPBAR_H, CB_TOPBAR);
-    DrawRectangle(ax, TOPBAR_H-1, WIN_W-ax, 1, CB_BORDER);
+    DrawRectangle(ax, 0, WW-ax, TOPBAR_H, CB_TOPBAR);
+    DrawRectangle(ax, TOPBAR_H-1, WW-ax, 1, CB_BORDER);
 
     Vector2 tv = MeasureB(title, 18);
     DrawTextEx(gFontB, title, (Vector2){ax+20.f, (TOPBAR_H-tv.y)*.5f}, 18.f, 1.f, CA_GOLD);
@@ -700,7 +701,7 @@ static void drawTopBar(const char *title) {
     time_t now = time(NULL); struct tm *ti = localtime(&now);
     char ts[32]; strftime(ts, 32, "%H:%M  %d/%m/%Y", ti);
     Vector2 tv2 = Measure(ts, 13);
-    DrawTxtL(ts, WIN_W-tv2.x-16.f, (TOPBAR_H-tv2.y)*.5f, 13.f, CT_MUTED);
+    DrawTxtL(ts, WW-tv2.x-16.f, (TOPBAR_H-tv2.y)*.5f, 13.f, CT_MUTED);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -709,13 +710,13 @@ static void drawTopBar(const char *title) {
 static void drawLogin(void) {
     /* Background glow circles */
     for (int i=0;i<12;i++) {
-        float px = WIN_W*.5f + sinf(gElapsed*.22f+i*1.05f)*480;
-        float py = WIN_H*.5f + cosf(gElapsed*.16f+i*.95f)*280;
+        float px = WW*.5f + sinf(gElapsed*.22f+i*1.05f)*480;
+        float py = WH*.5f + cosf(gElapsed*.16f+i*.95f)*280;
         DrawCircle((int)px,(int)py,32,(Color){120,170,255,35});
     }
 
     int cw=500, ch=454;
-    int cx=(WIN_W-cw)/2, cy=(WIN_H-ch)/2;
+    int cx=(WW-cw)/2, cy=(WH-ch)/2;
     Rectangle card={(float)cx,(float)cy,(float)cw,(float)ch};
 
     DrawRectangleRounded((Rectangle){card.x+8,card.y+10,cw,ch},0.16f,12,(Color){120,160,255,25});
@@ -738,8 +739,8 @@ static void drawLogin(void) {
         DrawCircle((int)kx,(int)(ky-6),2,(Color){255,150,210,90});
     }
 
-    Vector2 gtv = MeasureB("G-COFFEE", 26);
-    DrawTextEx(gFontB,"G-COFFEE",(Vector2){cx+(cw-gtv.x)*.5f, cy+60.f},26.f,1.f,CA_GOLD);
+    Vector2 gtv = MeasureB("ITF COFFEE", 26);
+    DrawTextEx(gFontB,"ITF COFFEE",(Vector2){cx+(cw-gtv.x)*.5f, cy+60.f},26.f,1.f,CA_GOLD);
 
     const char *sub="HỆ THỐNG QUẢN LÝ QUÁN CÀ PHÊ";
     Vector2 stv = Measure(sub,13);
@@ -782,7 +783,7 @@ static void drawLogin(void) {
 static void drawTableMap(void) {
     drawSidebar(); drawTopBar("SƠ ĐỒ BÀN");
     int ax=SIDEBAR_W, ay=TOPBAR_H;
-    int aw=WIN_W-ax, ah=WIN_H-ay;
+    int aw=WW-ax, ah=WH-ay;
     DrawRectangle(ax,ay,aw,ah,CB_BG);
 
     /* KPI row */
@@ -890,7 +891,7 @@ static void drawOrder(void) {
     drawTopBar(ttl);
 
     int ax=SIDEBAR_W, ay=TOPBAR_H;
-    int aw=WIN_W-ax, ah=WIN_H-ay;
+    int aw=WW-ax, ah=WH-ay;
     int menuW=(int)(aw*0.60f), ordW=aw-menuW;
     int menuX=ax, ordX=ax+menuW;
 
@@ -1029,8 +1030,8 @@ static void drawInvoice(void) {
     char ttl[48]; sprintf(ttl,"HÓA ĐƠN — BÀN %02d",gTables[t].id);
     drawTopBar(ttl);
 
-    int ax=SIDEBAR_W,ay=TOPBAR_H,aw=WIN_W-ax;
-    DrawRectangle(ax,ay,aw,WIN_H-ay,CB_BG);
+    int ax=SIDEBAR_W,ay=TOPBAR_H,aw=WW-ax;
+    DrawRectangle(ax,ay,aw,WH-ay,CB_BG);
 
     int iw=620;
     int ih=fmaxf(430, 280+gTables[t].itemCount*34+80);
@@ -1044,7 +1045,7 @@ static void drawInvoice(void) {
     DrawRectangleRounded((Rectangle){ix,iy,iw,82},0.05f,12,(Color){225,235,255,255});
     Vector2 htv=MeasureB("HÓA ĐƠN THANH TOÁN",18);
     DrawTextEx(gFontB,"HÓA ĐƠN THANH TOÁN",(Vector2){ix+(iw-htv.x)*.5f,iy+14},18.f,1.f,CA_GOLD);
-    const char *sub2="G-COFFEE  —  Hệ thống Quản lý Quán Cà Phê";
+    const char *sub2="ITF COFFEE  —  Hệ thống Quản lý Quán Cà Phê";
     Vector2 sv3=Measure(sub2,12);
     DrawTxtL(sub2,ix+(iw-sv3.x)*.5f,iy+44,12.f,CT_MUTED);
 
@@ -1100,13 +1101,13 @@ static void drawInvoice(void) {
 ═══════════════════════════════════════════════════════════════════ */
 static void drawMenuManage(void) {
     drawSidebar(); drawTopBar("QUẢN LÝ THỰC ĐƠN");
-    int ax=SIDEBAR_W,ay=TOPBAR_H,aw=WIN_W-ax,ah=WIN_H-ay;
+    int ax=SIDEBAR_W,ay=TOPBAR_H,aw=WW-ax,ah=WH-ay;
     DrawRectangle(ax,ay,aw,ah,CB_BG);
 
     if (gSubScr==0) {
         /* Toolbar */
         InputField((Rectangle){ax+14,ay+12,280,36},0,"Tìm kiếm món ăn...",13);
-        if (Button((Rectangle){WIN_W-132,ay+12,116,36},"+ Thêm món",CA_GOLD_DIM,CA_GOLD,0)){
+        if (Button((Rectangle){WW-132,ay+12,116,36},"+ Thêm món",CA_GOLD_DIM,CA_GOLD,0)){
             gSubScr=1;
             memset(gInp,0,sizeof(gInp)); memset(gInpLen,0,sizeof(gInpLen));
             memset(gInpPass,0,sizeof(gInpPass));
@@ -1162,7 +1163,7 @@ static void drawMenuManage(void) {
     else {
         /* Form thêm/sửa */
         int fw=520,fh=300;
-        int fx=(WIN_W-SIDEBAR_W-fw)/2+SIDEBAR_W, fy=ay+80;
+        int fx=(WW-SIDEBAR_W-fw)/2+SIDEBAR_W, fy=ay+80;
         DrawRectangleRounded((Rectangle){fx,fy,fw,fh},0.16f,12,CB_PANEL);
         DrawRectangleRoundedLines((Rectangle){fx,fy,fw,fh},0.16f,12,CB_BORDER);
         const char *ft=gSubScr==1?"THÊM MÓN MỚI":"SỬA THÔNG TIN MÓN";
@@ -1209,12 +1210,12 @@ static void drawMenuManage(void) {
 ═══════════════════════════════════════════════════════════════════ */
 static void drawStaffManage(void) {
     drawSidebar(); drawTopBar("QUẢN LÝ NHÂN VIÊN");
-    int ax=SIDEBAR_W,ay=TOPBAR_H,aw=WIN_W-ax,ah=WIN_H-ay;
+    int ax=SIDEBAR_W,ay=TOPBAR_H,aw=WW-ax,ah=WH-ay;
     DrawRectangle(ax,ay,aw,ah,CB_BG);
 
     if (gSubScr==0){
         InputField((Rectangle){ax+14,ay+12,280,36},0,"Tìm kiếm nhân viên...",13);
-        if (Button((Rectangle){WIN_W-148,ay+12,132,36},"+ Thêm nhân viên",CA_GOLD_DIM,CA_GOLD,0)){
+        if (Button((Rectangle){WW-148,ay+12,132,36},"+ Thêm nhân viên",CA_GOLD_DIM,CA_GOLD,0)){
             gSubScr=1;
             memset(gInp,0,sizeof(gInp)); memset(gInpLen,0,sizeof(gInpLen));
             memset(gInpPass,0,sizeof(gInpPass));
@@ -1269,7 +1270,7 @@ static void drawStaffManage(void) {
     else {
         bool isAdd=(gSubScr==1);
         int fw=560, fh=isAdd?410:350;
-        int fx=(WIN_W-SIDEBAR_W-fw)/2+SIDEBAR_W, fy=ay+60;
+        int fx=(WW-SIDEBAR_W-fw)/2+SIDEBAR_W, fy=ay+60;
         DrawRectangleRounded((Rectangle){fx,fy,fw,fh},0.16f,12,CB_PANEL);
         DrawRectangleRoundedLines((Rectangle){fx,fy,fw,fh},0.16f,12,CB_BORDER);
         const char *ft=isAdd?"THÊM NHÂN VIÊN MỚI":"SỬA THÔNG TIN NHÂN VIÊN";
@@ -1334,7 +1335,7 @@ static void drawStaffManage(void) {
 ═══════════════════════════════════════════════════════════════════ */
 static void drawStats(void) {
     drawSidebar(); drawTopBar("THỐNG KÊ DOANH THU & NHÂN SỰ");
-    int ax=SIDEBAR_W,ay=TOPBAR_H,aw=WIN_W-ax,ah=WIN_H-ay;
+    int ax=SIDEBAR_W,ay=TOPBAR_H,aw=WW-ax,ah=WH-ay;
     DrawRectangle(ax,ay,aw,ah,CB_BG);
 
     int occ=0; float liveBill=0;
@@ -1411,7 +1412,7 @@ static void drawStats(void) {
 ═══════════════════════════════════════════════════════════════════ */
 static void drawChart(void) {
     drawSidebar(); drawTopBar("BIỂU ĐỒ DOANH THU THEO NGÀY");
-    int ax=SIDEBAR_W,ay=TOPBAR_H,aw=WIN_W-ax,ah=WIN_H-ay;
+    int ax=SIDEBAR_W,ay=TOPBAR_H,aw=WW-ax,ah=WH-ay;
     DrawRectangle(ax,ay,aw,ah,CB_BG);
 
     typedef struct { char date[15]; float total; } DayRev;
@@ -1509,10 +1510,10 @@ static void drawDialog(void) {
     if (!gDlgOpen) return;
 
     /* Overlay mờ */
-    DrawRectangle(0,0,WIN_W,WIN_H,(Color){0,0,0,155});
+    DrawRectangle(0,0,WW,WH,(Color){0,0,0,155});
 
     int dw=480,dh=200;
-    int dx=(WIN_W-dw)/2,dy=(WIN_H-dh)/2;
+    int dx=(WW-dw)/2,dy=(WH-dh)/2;
 
     DrawRectangleRounded((Rectangle){dx+6,dy+8,dw,dh},0.08f,10,(Color){0,0,0,100});
     DrawRectangleRounded((Rectangle){dx,dy,dw,dh},0.08f,10,CB_PANEL);
@@ -1572,7 +1573,7 @@ static void drawToast(void) {
     if (gToastTimer <= 0) { gToastActive=false; return; }
     float alpha = fminf(1.f, gToastTimer/0.5f) * fminf(1.f, (3.f-gToastTimer+0.5f)/0.5f);
     int tw=500,th=52;
-    int tx=(WIN_W-tw)/2, ty=WIN_H-th-22;
+    int tx=(WW-tw)/2, ty=WH-th-22;
     DrawRectangleRounded((Rectangle){tx+4,ty+4,tw,th},0.45f,10,(Color){0,0,0,(unsigned char)(70*alpha)});
     Color bg={gToastColor.r,gToastColor.g,gToastColor.b,(unsigned char)(215*alpha)};
     DrawRectangleRounded((Rectangle){tx,ty,tw,th},0.45f,10,bg);
@@ -1584,8 +1585,8 @@ static void drawToast(void) {
    MAIN
 ═══════════════════════════════════════════════════════════════════ */
 int main(void) {
-    SetConfigFlags(FLAG_MSAA_4X_HINT);
-    InitWindow(WIN_W, WIN_H, "G-COFFEE — Hệ Thống Quản Lý Quán Cà Phê");
+    SetConfigFlags(FLAG_MSAA_4X_HINT | FLAG_WINDOW_RESIZABLE);
+    InitWindow(WIN_W, WIN_H, "ITF COFFEE — Hệ Thống Quản Lý Quán Cà Phê");
     SetTargetFPS(FPS);
     SetExitKey(KEY_NULL);
 
