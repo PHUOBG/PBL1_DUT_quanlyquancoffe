@@ -743,13 +743,13 @@ static void drawLogin(void) {
     /* Form inputs */
     int fx=cx+48, fw=cw-96;
     DrawTxtL("Tên đăng nhập",(float)fx, cy+150.f, 16.f, CT_MUTED);
-    InputField((Rectangle){(float)fx,(float)(cy+172),fw,52},0,"Nhập tên đăng nhập...",21);
+    InputField((Rectangle){(float)fx,(float)(cy+172),fw,52},0,"Nhập username...",21);
 
     DrawTxtL("Mật khẩu",(float)fx, cy+240.f, 16.f, CT_MUTED);
     gInpPass[1]=true;
-    InputField((Rectangle){(float)fx,(float)(cy+262),fw,52},1,"Nhập mật khẩu...",21);
+    InputField((Rectangle){(float)fx,(float)(cy+262),fw,52},1,"Nhập password...",21);
 
-    /* Chỉ giữ lại sự kiện click chuột vào nút đăng nhập */
+    /* Chi giu lai su kien click chuot vao nut button dang nhap */
     bool clk = Button((Rectangle){(float)fx,(float)(cy+342),(float)fw,58},
                       "ĐĂNG NHẬP",CA_GOLD_DIM,CA_GOLD,0);
 
@@ -760,7 +760,7 @@ static void drawLogin(void) {
                 strcmp(gStaff[i].password,gInp[1])==0){
                 gCurrentStaff=&gStaff[i];
                 resetScreen(SCR_TABLES);
-                char msg[80]; sprintf(msg,"Xin chao, %s!",gCurrentStaff->name);
+                char msg[80]; sprintf(msg,"Xin chào, %s!",gCurrentStaff->name);
                 showToast(msg,CS_OK); found=true; break;
             }
         }
@@ -871,7 +871,7 @@ static void drawTableMap(void) {
     DrawTxtL("Bàn trống",ax+32,ly,16.f,CT_MUTED);
     DrawCircle(ax+140,(int)(ly+9),6,CS_ERR);
     DrawTxtL("Đang phục vụ",ax+152,ly,16.f,CT_MUTED);
-    DrawTxtL(">> Click vào bàn để gọi món",ax+310,ly,16.f,CT_DIM);
+    DrawTxtL(">> Click vao ban de goi mon",ax+310,ly,16.f,CT_DIM);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1048,7 +1048,7 @@ static void drawInvoice(void) {
     char info[80];
     sprintf(info,"Thời gian: %s",ts3);  DrawTxtL(info,ix+32,py,15.f,CT_WHITE); py+=28;
     sprintf(info,"Bàn số: %d",gTables[t].id); DrawTxtL(info,ix+32,py,15.f,CT_WHITE); py+=28;
-    sprintf(info,"Thu ngan: %s",gCurrentStaff?gCurrentStaff->name:"-"); DrawTxtL(info,ix+32,py,15.f,CT_WHITE); py+=24;
+    sprintf(info,"Thu ngân: %s",gCurrentStaff?gCurrentStaff->name:"-"); DrawTxtL(info,ix+32,py,15.f,CT_WHITE); py+=24;
     DrawLine(ix+32,py+4,ix+iw-32,py+4,CB_BORDER); py+=18;
 
     DrawTxtBL("Tên món",  ix+32, py,14.f,CT_MUTED);
@@ -1208,7 +1208,7 @@ static void drawStaffManage(void) {
 
     if (gSubScr==0){
         InputField((Rectangle){ax+14,ay+12,280,36},0,"Tìm kiếm nhân viên...",13);
-        if (Button((Rectangle){WW-148,ay+12,132,36},"+ Thêm nhân viên",CA_GOLD_DIM,CA_GOLD,0)){
+        if (Button((Rectangle){WW-206,ay+12,190,36},"+ Thêm nhân viên",CA_GOLD_DIM,CA_GOLD,0)){
             gSubScr=1;
             memset(gInp,0,sizeof(gInp)); memset(gInpLen,0,sizeof(gInpLen));
             memset(gInpPass,0,sizeof(gInpPass));
