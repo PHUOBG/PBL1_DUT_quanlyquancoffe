@@ -1,4 +1,4 @@
-﻿/*
+/*
  * ITF COFFEE — Hệ Thống Quản Lý Quán Cà Phê
  * Giao diện đồ họa Raylib — Full Vietnamese Support
  *
@@ -455,6 +455,30 @@ static void updateHov(int slot, bool hovered) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   LOGO HELPER
+═══════════════════════════════════════════════════════════════════ */
+static void DrawCoffeeLogo(float cx, float cy, float radius, float time) {
+    // Hiệu ứng tỏa sáng nhẹ (Glow)
+    for (int i = 0; i < 3; i++) {
+        DrawCircle((int)cx, (int)cy, radius * (1.1f + i * 0.1f), (Color){120, 170, 255, (unsigned char)(30 - i * 10)});
+    }
+
+    // Các vòng tròn đồng tâm xen kẽ Xanh - Trắng
+    DrawCircle((int)cx, (int)cy, radius, (Color){90, 140, 255, 255}); // Xanh
+    DrawCircle((int)cx, (int)cy, radius * 0.75f, WHITE);            // Trắng
+    DrawCircle((int)cx, (int)cy, radius * 0.50f, (Color){90, 140, 255, 255}); // Xanh
+    DrawCircle((int)cx, (int)cy, radius * 0.25f, WHITE);            // Trắng
+
+    // Hiệu ứng khói (Steam) động
+    for (int i = 0; i < 3; i++) {
+        float ox = (i - 1) * (radius * 0.2f);
+        float phase = time * 2.5f + i * 0.8f;
+        float sy = cy - radius * 0.4f + sinf(phase) * 3.5f;
+        DrawLineEx((Vector2){cx + ox, cy - radius * 0.4f}, (Vector2){cx + ox + 1.0f, sy - (radius * 0.15f)}, 2.0f, (Color){200, 220, 255, 120});
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    NÚT BẤM (trả về true khi click)
 ═══════════════════════════════════════════════════════════════════ */
 static bool Button(Rectangle r, const char *label, Color bg, Color bgHov, int slot) {
@@ -603,19 +627,7 @@ static void drawSidebar(void) {
     DrawRectangle(0, 0, sw, 145, CB_BG);
 
     /* Coffee icon animated */
-    float cx = sw * 0.5f, cy = 50.f;
-    DrawCircle((int)cx, (int)cy, 30, (Color){90,140,255,255});
-    DrawCircle((int)cx, (int)cy, 22, CA_GOLD);
-    DrawCircle((int)cx, (int)cy, 14, (Color){90,140,255,255});
-    DrawCircle((int)cx, (int)cy,  7, CA_GOLD);
-    /* steam */
-    for (int i=0;i<3;i++) {
-        float ox = (i-1)*8.f;
-        float phase = gElapsed*2.2f + i*0.75f;
-        float sy = cy - 26 + sinf(phase)*2.5f;
-        DrawLineEx((Vector2){cx+ox, cy-26}, (Vector2){cx+ox+1.5f, sy-7}, 1.4f,
-                   (Color){255,150,210,90});
-    }
+    DrawCoffeeLogo(sw * 0.5f, 50.f, 30.f, gElapsed);
     /* title */
     Vector2 tv = MeasureB("ITF COFFEE", 22.f);
     DrawTextEx(gFontB, "ITF COFFEE", (Vector2){(sw-tv.x)*.5f, 82.f}, 22.f, 1.f, CA_GOLD);
@@ -722,17 +734,7 @@ static void drawLogin(void) {
     DrawRectangleRounded((Rectangle){card.x,card.y,(float)cw,120},0.16f,12,(Color){225,235,255,255});
 
     /* Coffee icon */
-    float ix=cx+cw*.5f, iy=cy+44.f;
-    DrawCircle((int)ix,(int)iy,26,(Color){90,140,255,255});
-    DrawCircle((int)ix,(int)iy,18,CA_GOLD);
-    DrawCircle((int)ix,(int)iy,12,(Color){90,140,255,255});
-    DrawCircle((int)ix,(int)iy, 6,CA_GOLD);
-    for (int i=0;i<3;i++){
-        float ph=gElapsed*2.2f+i*.75f;
-        float kx=ix+(i-1)*8.f;
-        float ky=iy-20+sinf(ph)*2.5f;
-        DrawCircle((int)kx,(int)(ky-6),2,(Color){255,150,210,90});
-    }
+    DrawCoffeeLogo(cx + cw * 0.5f, cy + 44.f, 26.f, gElapsed);
 
     Vector2 gtv = MeasureB("ITF COFFEE", 39);
     DrawTextEx(gFontB,"ITF COFFEE",(Vector2){cx+(cw-gtv.x)*.5f, cy+76.f},39.f,1.f,CA_GOLD);
