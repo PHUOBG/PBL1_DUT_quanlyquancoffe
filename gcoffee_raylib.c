@@ -839,15 +839,15 @@ static void drawTableMap(void) {
         DrawTxtL(stxt,fx+(tw-sv2.x)*.5f,fy+42,16.f,sc);
 
         if (occ2){
-            char bs[24]; sprintf(bs,"%.0f đ",gTables[i].currentBill);
-            Vector2 bv=MeasureB(bs,16);
-            DrawTextEx(gFontB,bs,(Vector2){fx+(tw-bv.x)*.5f,fy+84},16.f,1.f,CA_GOLD);
+            char bs[24]; sprintf(bs,"%.0f d",gTables[i].currentBill);
+            Vector2 bv=MeasureB(bs,18);
+            DrawTextEx(gFontB,bs,(Vector2){fx+(tw-bv.x)*.5f,fy+68},18.f,1.f,CA_GOLD);
             char sn[STR_LEN+6]; snprintf(sn,STR_LEN+5,"NV: %s",gTables[i].staffName);
-            Vector2 snv=Measure(sn,14);
-            DrawTxtL(sn,fx+(tw-snv.x)*.5f,fy+90,14.f,CT_MUTED);
-            char ni[16]; sprintf(ni,"%d món",gTables[i].itemCount);
-            Vector2 niv=Measure(ni,14);
-            DrawTxtL(ni,fx+(tw-niv.x)*.5f,fy+108,14.f,CT_DIM);
+            Vector2 snv=Measure(sn,13);
+            DrawTxtL(sn,fx+(tw-snv.x)*.5f,fy+100,13.f,CT_MUTED);
+            char ni[16]; sprintf(ni,"%d mon",gTables[i].itemCount);
+            Vector2 niv=Measure(ni,13);
+            DrawTxtL(ni,fx+(tw-niv.x)*.5f,fy+118,13.f,CT_DIM);
         }
 
         /* hover border glow */
@@ -892,11 +892,11 @@ static void drawOrder(void) {
     DrawRectangle(menuX+menuW-1,ay,1,ah,CB_BORDER);
 
     /* Tìm kiếm */
-    DrawTxtL("Tìm món:", menuX+14, ay+14, 27.f, CT_MUTED);
-    InputField((Rectangle){menuX+14,ay+32,menuW-28,36},0,"Nhập tên món...",13);
+    DrawTxtL("Tìm món:", menuX+14, ay+10, 15.f, CT_MUTED);
+    InputField((Rectangle){menuX+14,ay+30,menuW-28,38},0,"Nhập tên món...",13);
 
-    /* Danh sách thực đơn (có cuộn) */
-    int itemH=90, listStartY=ay+96, visH=ah-96;
+    /* Danh sach thuc don (co cuon) */
+    int itemH=90, listStartY=ay+80, visH=ah-80;
     Rectangle listArea={(float)menuX,(float)listStartY,(float)menuW,(float)visH};
     updateScroll(listArea, (float)(gMenuCount*itemH));
 
@@ -963,7 +963,7 @@ static void drawOrder(void) {
     Vector2 ohv=MeasureB(ohdr,18);
     DrawTextEx(gFontB,ohdr,(Vector2){ordX+(ordW-ohv.x)*.5f,ay+14},18.f,1.f,CA_GOLD);
 
-    int oStartY=ay+66, oItemH=66, oVisH=ah-66-130;
+    int oStartY=ay+66, oItemH=66, oVisH=ah-66-150;
     BeginScissorMode(ordX,oStartY,ordW,oVisH);
     if (!gTables[t].itemCount){
         Vector2 ev=Measure("Chưa có món nào",17);
@@ -975,7 +975,7 @@ static void drawOrder(void) {
         Rectangle r={(float)(ordX+6),fy,(float)(ordW-12),(float)(oItemH-4)};
         DrawRectangleRounded(r,0.15f,6,CB_CARD);
         DrawTxtL(gTables[t].items[i].name,r.x+8,r.y+5,16.f,CT_WHITE);
-        char qs[12]; sprintf(qs,"× %d",gTables[t].items[i].qty);
+        char qs[12]; sprintf(qs,"x %d",gTables[t].items[i].qty);
         DrawTxtL(qs,r.x+8,r.y+26,15.f,CT_MUTED);
         char ts2[24]; sprintf(ts2,"%.0f đ",gTables[t].items[i].price*gTables[t].items[i].qty);
         Vector2 tv2=Measure(ts2,16);
@@ -994,11 +994,12 @@ static void drawOrder(void) {
     EndScissorMode();
 
     /* Tổng tiền */
-    DrawRectangle(ordX,ay+ah-138,ordW,1,CB_BORDER);
+    int totLineY = ay+ah-110;
+    DrawRectangle(ordX, totLineY-8, ordW, 1, CB_BORDER);
     char tot[32]; sprintf(tot,"%.0f VND",gTables[t].currentBill);
-    DrawTxtL("TỔNG CỘNG:",ordX+10,ay+ah-100,17.f,CT_MUTED);
+    DrawTxtL("TỔNG CỘNG:", ordX+10, totLineY, 17.f, CT_MUTED);
     Vector2 totv=MeasureB(tot,22);
-    DrawTextEx(gFontB,tot,(Vector2){ordX+ordW-totv.x-10,ay+ah-132},22.f,1.f,CA_GOLD);
+    DrawTextEx(gFontB,tot,(Vector2){ordX+ordW-totv.x-10, totLineY-3},22.f,1.f,CA_GOLD);
 
     /* Nút hành động */
     float bW=(ordW-20)*.5f;
@@ -1432,17 +1433,28 @@ static void drawChart(void) {
         fclose(fp);
     }
     if (!dc){
-        Vector2 nv=Measure("Chưa có dữ liệu để vẽ biểu đồ.",16);
-        DrawTxtL("Chưa có dữ liệu để vẽ biểu đồ.",
+        Vector2 nv=Measure("Chua co du lieu de ve bieu do.",16);
+        DrawTxtL("Chua co du lieu de ve bieu do.",
             ax+(aw-nv.x)*.5f,ay+ah*.5f-8,16.f,CT_DIM);
         return;
     }
 
+    /* Tính tổng toàn bộ từ file (không phụ thuộc gTotalRevenue runtime) */
+    float totalAllTime=0;
     float maxRev=0;
-    for(int i=0;i<dc;i++) if(data[i].total>maxRev) maxRev=data[i].total;
+    for(int i=0;i<dc;i++){
+        totalAllTime+=data[i].total;
+        if(data[i].total>maxRev) maxRev=data[i].total;
+    }
     if(maxRev<1) maxRev=1;
 
-    int chartX=ax+70,chartY=ay+40,chartW=aw-110,chartH=ah-130;
+    /* Chỉ hiện tối đa 10 ngày gần nhất để tránh nhãn đè lên nhau */
+    int maxBars = 10;
+    int startBar = 0;
+    if(dc > maxBars) startBar = dc - maxBars;
+    int visibleDc = dc - startBar;
+
+    int chartX=ax+70,chartY=ay+40,chartW=aw-110,chartH=ah-150;
 
     /* Lưới ngang */
     for(int g=0;g<=5;g++){
@@ -1454,11 +1466,12 @@ static void drawChart(void) {
     }
 
     /* Cột */
-    int bw=fmaxf(20,(chartW-dc*8)/dc);
-    int bg2=(chartW-dc*bw)/(dc+1);
-    for(int i=0;i<dc;i++){
+    int bw=fmaxf(24,(chartW-visibleDc*10)/visibleDc);
+    int bg2=(chartW-visibleDc*bw)/(visibleDc+1);
+    for(int i=0;i<visibleDc;i++){
+        int di = startBar + i; /* index thực trong mảng data */
         int bx=chartX+bg2+i*(bw+bg2);
-        int bh=(int)((data[i].total/maxRev)*chartH);
+        int bh=(int)((data[di].total/maxRev)*chartH);
         int by=chartY+chartH-bh;
 
         /* gradient cột */
@@ -1474,24 +1487,43 @@ static void drawChart(void) {
         /* glow đỉnh */
         DrawRectangle(bx,by,bw,4,CA_GOLD_LITE);
 
-        /* nhãn ngày */
-        Vector2 dv=Measure(data[i].date,13);
-        DrawTxtL(data[i].date,bx+(bw-dv.x)*.5f,chartY+chartH+8,13.f,CT_MUTED);
+        /* nhãn ngày — xoay 45 độ nếu cột hẹp */
+        int labelX = bx + bw/2;
+        int labelY = chartY+chartH+10;
+        if(bw >= 60){
+            /* đủ rộng: vẽ ngang */
+            Vector2 dv=Measure(data[di].date,12);
+            DrawTxtL(data[di].date, labelX - (int)(dv.x*.5f), labelY, 12.f, CT_MUTED);
+        } else {
+            /* hẹp: vẽ xoay 45 độ */
+            DrawTextPro(gFont, data[di].date,
+                (Vector2){(float)labelX, (float)labelY},
+                (Vector2){0,0}, 45.f, 12.f, 1.f, CT_MUTED);
+        }
 
         /* giá trị trên đỉnh */
-        char vs[24]; sprintf(vs,"%.0f",data[i].total);
-        Vector2 vv=Measure(vs,13);
-        DrawTxtL(vs,bx+(bw-vv.x)*.5f,by-18,13.f,CA_GOLD_LITE);
+        if(bh > 20){
+            char vs[24]; sprintf(vs,"%.0f",data[di].total);
+            Vector2 vv=Measure(vs,12);
+            DrawTxtL(vs, bx+(bw-(int)vv.x)/2, by-16, 12.f, CA_GOLD_LITE);
+        }
 
         /* tooltip hover */
         Rectangle br={(float)bx,(float)by,(float)bw,(float)bh};
         if(CheckCollisionPointRec(GetMousePosition(),br)){
             DrawRectangleRounded((Rectangle){bx-18,by-52,148,44},0.2f,6,CB_PANEL);
             DrawRectangleRoundedLines((Rectangle){bx-18,by-52,148,44},0.2f,6,CB_BORDER2);
-            DrawTxtL(data[i].date,bx-14,by-48,13.f,CT_MUTED);
-            char amt[32]; sprintf(amt,"%.0f VND",data[i].total);
+            DrawTxtL(data[di].date,bx-14,by-48,13.f,CT_MUTED);
+            char amt[32]; sprintf(amt,"%.0f VND",data[di].total);
             DrawTextEx(gFontB,amt,(Vector2){bx-14,by-32},15.f,1.f,CA_GOLD);
         }
+    }
+
+    /* Ghi chú nếu có nhiều ngày hơn đang hiện */
+    if(dc > maxBars){
+        char note[64]; sprintf(note,"(Hien %d/%d ngay gan nhat)",visibleDc,dc);
+        Vector2 nv2=Measure(note,13);
+        DrawTxtL(note,ax+(aw-nv2.x)*.5f,chartY-20,13.f,CT_DIM);
     }
 
     /* Trục */
@@ -1499,9 +1531,9 @@ static void drawChart(void) {
     DrawLine(chartX,chartY+chartH,chartX+chartW,chartY+chartH,CB_BORDER2);
 
     /* Tổng */
-    char sumStr[64]; sprintf(sumStr,"Tổng tất cả:  %.0f VND",gTotalRevenue);
+    char sumStr[64]; sprintf(sumStr,"Tong tat ca:  %.0f VND",totalAllTime);
     Vector2 sv4=MeasureB(sumStr,17);
-    DrawTextEx(gFontB,sumStr,(Vector2){ax+(aw-sv4.x)*.5f,chartY+chartH+46},17.f,1.f,CA_GOLD);
+    DrawTextEx(gFontB,sumStr,(Vector2){ax+(aw-sv4.x)*.5f,chartY+chartH+70},17.f,1.f,CA_GOLD);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
