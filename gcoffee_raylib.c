@@ -1,4 +1,4 @@
-﻿/*
+/*
  * ITF COFFEE — Hệ Thống Quản Lý Quán Cà Phê
  * Giao diện đồ họa Raylib — Full Vietnamese Support
  *
@@ -1119,69 +1119,93 @@ static void drawOrder(void) {
     }
   }
   EndScissorMode();
+  
+  /* ── Đơn hàng (phải) ── */
+  int oPanelY = ay;
+  int oPanelH = ah;
+  DrawRectangle(ordX, oPanelY, ordW, oPanelH, CB_PANEL);
+  DrawRectangle(ordX, oPanelY, ordW, 64, CB_BG);
+  DrawRectangle(ordX, oPanelY + 63, ordW, 1, CB_BORDER);
 
-    /* ── Tổng tiền — panel nổi bật ── */
-    int panelH   = 164;                          /* chiều cao khu vực phía dưới */
-    int panelY   = ay + ah - panelH;
+  char ohdr[32];
+  sprintf(ohdr, "ĐƠN HÀNG - BÀN %02d", gTables[t].id);
+  Vector2 ohv = MeasureB(ohdr, 18);
+  DrawTextEx(gFontB, ohdr, (Vector2){ordX + (ordW - ohv.x) * .5f, ay + 14}, 18.f,
+             1.f, CA_GOLD);
 
-    /* đường phân cách nhẹ */
-    DrawRectangle(ordX, panelY, ordW, 1, CB_BORDER2);
+  int oStartY = ay + 66, oItemH = 66, oVisH = ah - 66 - 164;
+  BeginScissorMode(ordX, oStartY, ordW, oVisH);
+  if (!gTables[t].itemCount) {
+    Vector2 ev = Measure("Chưa có món nào", 17);
+    DrawTxtL("Chưa có món nào", ordX + (ordW - ev.x) * .5f, oStartY + 24, 17.f,
+             CT_DIM);
+  }
+  for (int i = 0; i < gTables[t].itemCount; i++) {
+    float fy = (float)(oStartY + i * oItemH);
+    if (fy + oItemH > oStartY + oVisH)
+      break;
+    Rectangle r = {(float)(ordX + 6), fy, (float)(ordW - 12),
+                   (float)(oItemH - 4)};
+    DrawRectangleRounded(r, 0.15f, 6, CB_CARD);
+    DrawTxtL(gTables[t].items[i].name, r.x + 8, r.y + 5, 16.f, CT_WHITE);
+    char qs[12];
+    sprintf(qs, "x %d", gTables[t].items[i].qty);
+    DrawTxtL(qs, r.x + 8, r.y + 26, 15.f, CT_MUTED);
+    char ts2[24];
+    sprintf(ts2, "%.0f đ",
+            gTables[t].items[i].price * gTables[t].items[i].qty);
+    Vector2 tv2 = Measure(ts2, 16);
+    DrawTxtL(ts2, r.x + r.width - tv2.x - 8, r.y + 5, 16.f, CA_GOLD);
 
-    /* nền tổng cộng */
-    DrawRectangleRounded((Rectangle){ordX+8, panelY+8, ordW-16, 54}, 0.18f, 8,
-                         (Color){225,235,255,255});
-
-    /* nhãn bên trái */
-    DrawTxtVCL("TỔNG CỘNG",
-               (Rectangle){ordX+8, panelY+8, ordW-16, 54},
-               16.f, CT_MUTED, 14.f, false);
-
-    /* số tiền bên phải — to, nổi */
-    char tot[32]; sprintf(tot,"%.0f VND", gTables[t].currentBill);
-    Vector2 totv = MeasureB(tot, 24);
-    float totX   = ordX + ordW - totv.x - 14;
-    float totY   = panelY + 8 + (54 - totv.y) * 0.5f;
-    DrawTextEx(gFontB, tot, (Vector2){totX, totY}, 24.f, 1.f, CA_GOLD);
-
-    /* ── Nút hành động ── */
-    float bW = (ordW - 20) * 0.5f;
-    if (Button((Rectangle){ordX+6,  panelY+72, bW,   44},"Quay lại",   CB_CARD,     CB_CARD_HOV,  4))
-        resetScreen(SCR_TABLES);
-    if (Button((Rectangle){ordX+14+bW, panelY+72, bW, 44},"Thanh toán", CA_GOLD_DIM, CA_GOLD,      5)){
-        if (gTables[t].itemCount>0) { gScreen=SCR_INVOICE; }
-        else showToast("Bàn chưa có món nào!",CS_WARN);
-    }
-    if (Button((Rectangle){ordX+6, panelY+122, ordW-12, 36},"Làm mới đơn",
-               CB_CARD,(Color){45,26,12,255},6)){
-        if (gTables[t].itemCount>0)
-            openDialog("Xác nhận làm mới","Xóa hết đơn hiện tại của bàn này?",300+t);
+    /* Nút xóa */
+    Rectangle xr = {r.x + r.width - 18, r.y + r.height - 18, 16, 14};
+    DrawRectangleRounded(xr, 0.4f, 4, (Color){65, 20, 16, 255});
+    DrawTxtCenter("-", xr, 11.f, CS_ERR, false);
+    if (CheckCollisionPointRec(GetMousePosition(), xr) &&
+        IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
+      gTables[t].currentBill -=
+          gTables[t].items[i].price * gTables[t].items[i].qty;
+      for (int j = i; j < gTables[t].itemCount - 1; j++)
+        gTables[t].items[j] = gTables[t].items[j + 1];
+      gTables[t].itemCount--;
+      if (!gTables[t].itemCount) {
+        gTables[t].isOccupied = 0;
+        gTables[t].currentBill = 0;
+      }
     }
   }
   EndScissorMode();
 
-  /* Tổng tiền */
-  int totLineY = ay + ah - 110;
-  DrawRectangle(ordX, totLineY - 8, ordW, 1, CB_BORDER);
+  /* ── Tổng tiền (dưới cùng bảng Đơn hàng) ── */
+  int panelH = 164;
+  int panelY = ay + ah - panelH;
+
+  DrawRectangle(ordX, panelY, ordW, 1, CB_BORDER2);
+  DrawRectangleRounded((Rectangle){ordX + 8, panelY + 8, ordW - 16, 54}, 0.18f,
+                       8, (Color){225, 235, 255, 255});
+  DrawTxtVCL("TỔNG CỘNG", (Rectangle){ordX + 8, panelY + 8, ordW - 16, 54},
+             16.f, CT_MUTED, 14.f, false);
+
   char tot[32];
   sprintf(tot, "%.0f VND", gTables[t].currentBill);
-  DrawTxtL("TỔNG CỘNG:", ordX + 10, totLineY, 17.f, CT_MUTED);
-  Vector2 totv = MeasureB(tot, 22);
-  DrawTextEx(gFontB, tot, (Vector2){ordX + ordW - totv.x - 10, totLineY - 3},
-             22.f, 1.f, CA_GOLD);
+  Vector2 totv = MeasureB(tot, 24);
+  float totX = ordX + ordW - totv.x - 14;
+  float totY = panelY + 8 + (54 - totv.y) * 0.5f;
+  DrawTextEx(gFontB, tot, (Vector2){totX, totY}, 24.f, 1.f, CA_GOLD);
 
-  /* Nút hành động */
-  float bW = (ordW - 20) * .5f;
-  if (Button((Rectangle){ordX + 6, ay + ah - 94, bW, 40}, "Quay lại", CB_CARD,
+  /* ── Nút hành động ── */
+  float bW = (ordW - 20) * 0.5f;
+  if (Button((Rectangle){ordX + 6, panelY + 72, bW, 44}, "Quay lại", CB_CARD,
              CB_CARD_HOV, 4))
     resetScreen(SCR_TABLES);
-  if (Button((Rectangle){ordX + 14 + bW, ay + ah - 94, bW, 40}, "Thanh toán",
+  if (Button((Rectangle){ordX + 14 + bW, panelY + 72, bW, 44}, "Thanh toán",
              CA_GOLD_DIM, CA_GOLD, 5)) {
     if (gTables[t].itemCount > 0) {
       gScreen = SCR_INVOICE;
     } else
       showToast("Bàn chưa có món nào!", CS_WARN);
   }
-  if (Button((Rectangle){ordX + 6, ay + ah - 48, ordW - 12, 38}, "Làm mới đơn",
+  if (Button((Rectangle){ordX + 6, panelY + 122, ordW - 12, 36}, "Làm mới đơn",
              CB_CARD, (Color){45, 26, 12, 255}, 6)) {
     if (gTables[t].itemCount > 0)
       openDialog("Xác nhận làm mới", "Xóa hết đơn hiện tại của bàn này?",
