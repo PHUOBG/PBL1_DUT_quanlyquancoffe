@@ -994,23 +994,39 @@ static void drawOrder(void) {
     }
     EndScissorMode();
 
-    /* Tổng tiền */
-    int totLineY = ay+ah-110;
-    DrawRectangle(ordX, totLineY-8, ordW, 1, CB_BORDER);
-    char tot[32]; sprintf(tot,"%.0f VND",gTables[t].currentBill);
-    DrawTxtL("TỔNG CỘNG:", ordX+10, totLineY, 17.f, CT_MUTED);
-    Vector2 totv=MeasureB(tot,22);
-    DrawTextEx(gFontB,tot,(Vector2){ordX+ordW-totv.x-10, totLineY-3},22.f,1.f,CA_GOLD);
+    /* ── Tổng tiền — panel nổi bật ── */
+    int panelH   = 164;                          /* chiều cao khu vực phía dưới */
+    int panelY   = ay + ah - panelH;
 
-    /* Nút hành động */
-    float bW=(ordW-20)*.5f;
-    if (Button((Rectangle){ordX+6,ay+ah-94,bW,40},"Quay lại",CB_CARD,CB_CARD_HOV,4))
+    /* đường phân cách nhẹ */
+    DrawRectangle(ordX, panelY, ordW, 1, CB_BORDER2);
+
+    /* nền tổng cộng */
+    DrawRectangleRounded((Rectangle){ordX+8, panelY+8, ordW-16, 54}, 0.18f, 8,
+                         (Color){225,235,255,255});
+
+    /* nhãn bên trái */
+    DrawTxtVCL("TỔNG CỘNG",
+               (Rectangle){ordX+8, panelY+8, ordW-16, 54},
+               16.f, CT_MUTED, 14.f, false);
+
+    /* số tiền bên phải — to, nổi */
+    char tot[32]; sprintf(tot,"%.0f VND", gTables[t].currentBill);
+    Vector2 totv = MeasureB(tot, 24);
+    float totX   = ordX + ordW - totv.x - 14;
+    float totY   = panelY + 8 + (54 - totv.y) * 0.5f;
+    DrawTextEx(gFontB, tot, (Vector2){totX, totY}, 24.f, 1.f, CA_GOLD);
+
+    /* ── Nút hành động ── */
+    float bW = (ordW - 20) * 0.5f;
+    if (Button((Rectangle){ordX+6,  panelY+72, bW,   44},"Quay lại",   CB_CARD,     CB_CARD_HOV,  4))
         resetScreen(SCR_TABLES);
-    if (Button((Rectangle){ordX+14+bW,ay+ah-94,bW,40},"Thanh toán",CA_GOLD_DIM,CA_GOLD,5)){
+    if (Button((Rectangle){ordX+14+bW, panelY+72, bW, 44},"Thanh toán", CA_GOLD_DIM, CA_GOLD,      5)){
         if (gTables[t].itemCount>0) { gScreen=SCR_INVOICE; }
         else showToast("Bàn chưa có món nào!",CS_WARN);
     }
-    if (Button((Rectangle){ordX+6,ay+ah-48,ordW-12,38},"Làm mới đơn",CB_CARD,(Color){45,26,12,255},6)){
+    if (Button((Rectangle){ordX+6, panelY+122, ordW-12, 36},"Làm mới đơn",
+               CB_CARD,(Color){45,26,12,255},6)){
         if (gTables[t].itemCount>0)
             openDialog("Xác nhận làm mới","Xóa hết đơn hiện tại của bàn này?",300+t);
     }

@@ -1,4 +1,4 @@
-33
+28
 100
 admin
 123
@@ -89,37 +89,10 @@ Nhân Viên
 0.00
 0
 0
-110
-kimdung
-123
-Nguyễn Vũ Kim Dung
-Nhân Viên
-20000.00
-0.00
-0
-0
-111
-vietdung
-123
-Nguyễn Việt Dũng
-Nhân Viên
-20000.00
-0.00
-0
-0
 112
 minhhái
 123
 Nguyễn Minh Hải
-Nhân Viên
-20000.00
-0.00
-0
-0
-113
-hoanghai
-123
-Vũ Hoàng Hải
 Nhân Viên
 20000.00
 0.00
@@ -246,24 +219,6 @@ Nhân Viên
 huumanh
 123
 Nguyễn Hữu Mạnh
-Nhân Viên
-20000.00
-0.00
-0
-0
-128
-trongnghia
-123
-Huỳnh Quốc Trọng Nghĩa
-Nhân Viên
-20000.00
-0.00
-0
-0
-129
-quangnghia
-123
-Nguyễn Quang Nghĩa
 Nhân Viên
 20000.00
 0.00
