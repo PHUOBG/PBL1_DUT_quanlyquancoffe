@@ -987,7 +987,7 @@ static void drawTableMap(void) {
 
     if (occ2) {
       char bs[24];
-      sprintf(bs, "%.0f d", gTables[i].currentBill);
+      sprintf(bs, "%.0f VND", gTables[i].currentBill);
       Vector2 bv = MeasureB(bs, 18);
       DrawTextEx(gFontB, bs, (Vector2){fx + (tw - bv.x) * .5f, fy + 68}, 18.f,
                  1.f, CA_GOLD);
