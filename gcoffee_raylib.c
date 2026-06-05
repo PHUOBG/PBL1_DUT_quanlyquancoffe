@@ -485,19 +485,20 @@ static bool Button(Rectangle r, const char *label, Color bg, Color bgHov, int sl
 }
 
 /* Nút nhỏ (inline bảng) */
-static bool SmallBtn(Rectangle r, const char *label, Color bg, Color bgH, int slot) {
+static bool SmallBtn(Rectangle r, const char *label,Color bg, Color bgH, int slot){
     Vector2 mp = GetMousePosition();
     bool hov = CheckCollisionPointRec(mp, r);
     bool clk = hov && IsMouseButtonReleased(MOUSE_LEFT_BUTTON);
     updateHov(slot, hov);
     float t = gHov[slot];
     Color dc = {
-        (unsigned char)lerp((float)bg.r,(float)bgH.r,t),
-        (unsigned char)lerp((float)bg.g,(float)bgH.g,t),
-        (unsigned char)lerp((float)bg.b,(float)bgH.b,t), 255
+        (unsigned char)lerp((float)bg.r, (float)bgH.r, t),
+        (unsigned char)lerp((float)bg.g, (float)bgH.g, t),
+        (unsigned char)lerp((float)bg.b, (float)bgH.b, t),
+        255
     };
     DrawRectangleRounded(r, 0.35f, 6, dc);
-    DrawTxtCenter(label, r, 27.f, CT_WHITE, false);
+    DrawTxtCenter(label, r, 18.f, CT_WHITE, false);
     if (hov) SetMouseCursor(MOUSE_CURSOR_POINTING_HAND);
     return clk;
 }
@@ -767,7 +768,7 @@ static void drawLogin(void) {
         if (!found) showToast("Sai tên đăng nhập hoặc mật khẩu!",CS_ERR);
     }
 
-    const char *hint="Tài khoản mặc định:  admin / 123456";
+    const char *hint="Tài khoản mặc định:  admin / 123";
     DrawTxtL(hint, (float)(cx+24), cy+ch-28.f, 14.f, CT_DIM);
 }
 /* ═══════════════════════════════════════════════════════════════════
