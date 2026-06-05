@@ -1524,7 +1524,7 @@ static void drawStaffManage(void) {
       DrawTxtL(gStaff[i].name, ax + 210, ty, 18.f, CT_WHITE);
       DrawTxtL(gStaff[i].position, ax + 440, ty, 18.f, CT_MUTED);
       char sh[24];
-      sprintf(sh, "%.0f đ/h", gStaff[i].salaryPerHour);
+      sprintf(sh, "%.0f VND/h", gStaff[i].salaryPerHour);
       DrawTxtL(sh, ax + 620, ty, 18.f, CA_GOLD);
       int by = (int)(fy + (rowH - 26) * .5f);
       if (gStaff[i].id != 100) {
@@ -1705,7 +1705,7 @@ static void drawStats(void) {
     DrawTxtL(tn, tr.x + (tr.width - tnv.x) * .5f, tr.y + 6, 16.f, CT_WHITE);
     if (occ2) {
       char bs[24];
-      sprintf(bs, "%.0f đ", gTables[i].currentBill);
+      sprintf(bs, "%.0f VND", gTables[i].currentBill);
       Vector2 bv = MeasureB(bs, 18.f);
       DrawTextEx(gFontB, bs,
                  (Vector2){tr.x + (tr.width - bv.x) * .5f, tr.y + 36}, 18.f,
