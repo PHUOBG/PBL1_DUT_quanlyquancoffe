@@ -89,6 +89,17 @@ static int gMenuCount = 0;
 static Table gTables[MAX_TABLES];
 static float gTotalRevenue = 0;
 static Staff *gCurrentStaff = NULL;
+static int gNextInvoiceId = 1; /* Mã hóa đơn tự tăng */
+
+/* Doanh thu theo nhân viên trong ngày */
+typedef struct {
+  int staffId;
+  char staffName[STR_LEN];
+  float todayRevenue;
+  int invoiceCount;
+} StaffRevenue;
+static StaffRevenue gStaffRev[MAX_STAFF];
+static int gStaffRevCount = 0;
 
 /* ═══════════════════════════════════════
    WHITE • BLUE • PINK THEME
@@ -141,6 +152,8 @@ typedef enum {
   SCR_STAFF,
   SCR_STATS,
   SCR_CHART,
+  SCR_INVOICE_HIST, /* Lịch sử hóa đơn chi tiết */
+  SCR_CHANGE_PW,    /* Đổi mật khẩu */
 } Screen;
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -409,45 +422,92 @@ static void loadMenu(void) {
     saveMenu();
   }
 }
+static void loadInvoiceId(void) {
+  FILE *fp = fopen("invoice_id.txt", "r");
+  if (fp) { fscanf(fp, "%d", &gNextInvoiceId); fclose(fp); }
+  else gNextInvoiceId = 1;
+}
+static void saveInvoiceId(void) {
+  FILE *fp = fopen("invoice_id.txt", "w");
+  if (fp) { fprintf(fp, "%d\n", gNextInvoiceId); fclose(fp); }
+}
+
+/* Cập nhật doanh thu nhân viên trong ngày (runtime + file) */
+static void updateStaffRevenue(int staffId, const char *staffName, float amount) {
+  /* Cập nhật runtime */
+  for (int i = 0; i < gStaffRevCount; i++) {
+    if (gStaffRev[i].staffId == staffId) {
+      gStaffRev[i].todayRevenue += amount;
+      gStaffRev[i].invoiceCount++;
+      goto save_cashier;
+    }
+  }
+  if (gStaffRevCount < MAX_STAFF) {
+    gStaffRev[gStaffRevCount].staffId = staffId;
+    strncpy(gStaffRev[gStaffRevCount].staffName, staffName, STR_LEN-1);
+    gStaffRev[gStaffRevCount].todayRevenue = amount;
+    gStaffRev[gStaffRevCount].invoiceCount = 1;
+    gStaffRevCount++;
+  }
+save_cashier:;
+  /* Lưu file doanh thu theo nhân viên: cashier_<id>.txt */
+  time_t now2 = time(NULL); struct tm *ti2 = localtime(&now2);
+  char cfn[64]; sprintf(cfn, "cashier_%d.txt", staffId);
+  FILE *cf = fopen(cfn, "a");
+  if (cf) {
+    fprintf(cf, "%02d/%02d/%04d %02d:%02d | HD#%04d | %.0f VND\n",
+      ti2->tm_mday, ti2->tm_mon+1, ti2->tm_year+1900,
+      ti2->tm_hour, ti2->tm_min, gNextInvoiceId-1, amount);
+    fclose(cf);
+  }
+}
+
 static void saveInvoice(int t) {
   time_t now = time(NULL);
   struct tm *ti = localtime(&now);
+  int invoiceId = gNextInvoiceId++;
+  saveInvoiceId();
+
+  /* File hóa đơn chi tiết theo ngày */
   char fn[64];
-  sprintf(fn, "hoadon_%02d_%02d_%04d.txt", ti->tm_mday, ti->tm_mon + 1,
-          ti->tm_year + 1900);
+  sprintf(fn, "hoadon_%02d_%02d_%04d.txt", ti->tm_mday, ti->tm_mon + 1, ti->tm_year + 1900);
   FILE *fp = fopen(fn, "a");
   if (fp) {
-    fprintf(
-        fp,
-        "================================================================\n");
-    fprintf(fp, "Thời gian: %02d:%02d:%02d\n", ti->tm_hour, ti->tm_min,
-            ti->tm_sec);
-    fprintf(fp, "Bàn: %d | Thu ngân: %s\n", gTables[t].id,
+    fprintf(fp, "================================================================\n");
+    fprintf(fp, "MÃ HÓA ĐƠN : HD#%04d\n", invoiceId);
+    fprintf(fp, "Thời gian  : %02d:%02d:%02d  %02d/%02d/%04d\n",
+            ti->tm_hour, ti->tm_min, ti->tm_sec,
+            ti->tm_mday, ti->tm_mon+1, ti->tm_year+1900);
+    fprintf(fp, "Bàn        : %d | Thu ngân: %s\n", gTables[t].id,
             gCurrentStaff ? gCurrentStaff->name : "?");
-    fprintf(
-        fp,
-        "----------------------------------------------------------------\n");
+    fprintf(fp, "----------------------------------------------------------------\n");
+    fprintf(fp, "%-25s | %-12s | %-4s | %s\n", "Tên món", "Đơn giá", "SL", "Thành tiền");
+    fprintf(fp, "----------------------------------------------------------------\n");
     for (int i = 0; i < gTables[t].itemCount; i++)
-      fprintf(fp, "%-25s | %-10.0f | %-4d | %.0f VND\n",
+      fprintf(fp, "%-25s | %-12.0f | %-4d | %.0f VND\n",
               gTables[t].items[i].name, gTables[t].items[i].price,
               gTables[t].items[i].qty,
               gTables[t].items[i].price * gTables[t].items[i].qty);
-    fprintf(
-        fp,
-        "----------------------------------------------------------------\n");
-    fprintf(fp, "TỔNG: %.0f VND\n", gTables[t].currentBill);
-    fprintf(
-        fp,
-        "================================================================\n\n");
+    fprintf(fp, "----------------------------------------------------------------\n");
+    fprintf(fp, "TỔNG       : %.0f VND\n", gTables[t].currentBill);
+    fprintf(fp, "================================================================\n\n");
     fclose(fp);
   }
+
+  /* File tổng doanh thu (đọc bởi biểu đồ & thống kê) */
   FILE *fr = fopen("tongdoanhthu.txt", "a");
   if (fr) {
-    fprintf(fr, "%02d/%02d/%04d - Bàn %d - Tổng: %.0f VND\n", ti->tm_mday,
-            ti->tm_mon + 1, ti->tm_year + 1900, gTables[t].id,
+    fprintf(fr, "%02d/%02d/%04d|HD#%04d|Bàn%d|%s|%.0f\n",
+            ti->tm_mday, ti->tm_mon+1, ti->tm_year+1900,
+            invoiceId, gTables[t].id,
+            gCurrentStaff ? gCurrentStaff->name : "?",
             gTables[t].currentBill);
     fclose(fr);
   }
+
+  /* Cập nhật doanh thu nhân viên */
+  if (gCurrentStaff)
+    updateStaffRevenue(gCurrentStaff->id, gCurrentStaff->name, gTables[t].currentBill);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -660,6 +720,9 @@ static void InputField(Rectangle r, int idx, const char *placeholder,
 /* ═══════════════════════════════════════════════════════════════════
    XỬ LÝ PHÍM / INPUT
 ═══════════════════════════════════════════════════════════════════ */
+/* Forward declaration */
+static void performLogin(void);
+
 static void processInput(void) {
   gCursorBlink += GetFrameTime();
   if (gCursorBlink > 2.f)
@@ -685,6 +748,15 @@ static void processInput(void) {
     /* BÍ QUYẾT: Nuốt phím bằng cách ép bộ đệm Raylib đọc trạng thái hiện tại
        ngay lập tức, ngăn không cho hàm drawLogin() phía sau nhận diện nhầm phím
        Enter ở Frame này */
+    while (GetCharPressed() > 0)
+      ;
+    return;
+  }
+
+  /* ĐĂNG NHẬP NGAY KHI NHẤN ENTER Ở Ô PASSWORD (MÀN HÌNH LOGIN) */
+  if (gScreen == SCR_LOGIN && idx == 1 &&
+      (IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER))) {
+    performLogin();
     while (GetCharPressed() > 0)
       ;
     return;
@@ -764,13 +836,14 @@ static void drawSidebar(void) {
   NavItem nav[] = {
       {"  Sơ đồ Bàn", SCR_TABLES, false}, {"  Thực đơn", SCR_MENU, false},
       {"  Nhân viên", SCR_STAFF, false},  {"  Thống kê", SCR_STATS, false},
-      {"  Biểu đồ", SCR_CHART, false},    {"", -1, false}, /* separator */
+      {"  Biểu đồ", SCR_CHART, false},    {"  Lịch sử HD", SCR_INVOICE_HIST, false},
+      {"", -1, false}, /* separator */
       {"  Đăng xuất", -1, true},
   };
   int startY = gCurrentStaff ? 226 : 152;
   int bH = 50, bPad = 8;
 
-  for (int i = 0; i < 7; i++) {
+  for (int i = 0; i < 8; i++) {
     if (!nav[i].label[0])
       continue; /* separator */
     Rectangle r = {(float)bPad, (float)(startY + i * (bH + 4)),
@@ -829,6 +902,27 @@ static void drawTopBar(const char *title) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
+   HỮU TRỢ ĐĂNG NHẬP
+═══════════════════════════════════════════════════════════════════ */
+static void performLogin(void) {
+  bool found = false;
+  for (int i = 0; i < gStaffCount; i++) {
+    if (strcmp(gStaff[i].username, gInp[0]) == 0 &&
+        strcmp(gStaff[i].password, gInp[1]) == 0) {
+      gCurrentStaff = &gStaff[i];
+      resetScreen(SCR_TABLES);
+      char msg[80];
+      sprintf(msg, "Xin chào, %s!", gCurrentStaff->name);
+      showToast(msg, CS_OK);
+      found = true;
+      break;
+    }
+  }
+  if (!found)
+    showToast("Sai tên đăng nhập hoặc mật khẩu!", CS_ERR);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
    MÀN HÌNH ĐĂNG NHẬP
 ═══════════════════════════════════════════════════════════════════ */
 static void drawLogin(void) {
@@ -879,21 +973,7 @@ static void drawLogin(void) {
                     "ĐĂNG NHẬP", CA_GOLD_DIM, CA_GOLD, 0);
 
   if (clk) {
-    bool found = false;
-    for (int i = 0; i < gStaffCount; i++) {
-      if (strcmp(gStaff[i].username, gInp[0]) == 0 &&
-          strcmp(gStaff[i].password, gInp[1]) == 0) {
-        gCurrentStaff = &gStaff[i];
-        resetScreen(SCR_TABLES);
-        char msg[80];
-        sprintf(msg, "Xin chào, %s!", gCurrentStaff->name);
-        showToast(msg, CS_OK);
-        found = true;
-        break;
-      }
-    }
-    if (!found)
-      showToast("Sai tên đăng nhập hoặc mật khẩu!", CS_ERR);
+    performLogin();
   }
 
   const char *hint = "Tài khoản mặc định:  admin / 123";
@@ -1022,7 +1102,7 @@ static void drawTableMap(void) {
   DrawTxtL("Bàn trống", ax + 32, ly, 16.f, CT_MUTED);
   DrawCircle(ax + 140, (int)(ly + 9), 6, CS_ERR);
   DrawTxtL("Đang phục vụ", ax + 152, ly, 16.f, CT_MUTED);
-  DrawTxtL(">> Click vao ban de goi mon", ax + 310, ly, 16.f, CT_DIM);
+  DrawTxtL(">> Click vào bàn để gọi món", ax + 310, ly, 16.f, CT_DIM);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -1152,26 +1232,37 @@ static void drawOrder(void) {
     sprintf(qs, "x %d", gTables[t].items[i].qty);
     DrawTxtL(qs, r.x + 8, r.y + 26, 15.f, CT_MUTED);
     char ts2[24];
-    sprintf(ts2, "%.0f đ",
+    sprintf(ts2, "%.0f d",
             gTables[t].items[i].price * gTables[t].items[i].qty);
     Vector2 tv2 = Measure(ts2, 16);
     DrawTxtL(ts2, r.x + r.width - tv2.x - 8, r.y + 5, 16.f, CA_GOLD);
 
-    /* Nút xóa */
-    Rectangle xr = {r.x + r.width - 18, r.y + r.height - 18, 16, 14};
-    DrawRectangleRounded(xr, 0.4f, 4, (Color){65, 20, 16, 255});
-    DrawTxtCenter("-", xr, 11.f, CS_ERR, false);
-    if (CheckCollisionPointRec(GetMousePosition(), xr) &&
+    /* Nút - (giảm số lượng / xóa) */
+    Rectangle minR = {r.x + r.width - 52, r.y + r.height - 22, 22, 18};
+    DrawRectangleRounded(minR, 0.4f, 4, (Color){255, 100, 130, 200});
+    DrawTxtCenter("-", minR, 14.f, WHITE, true);
+    if (CheckCollisionPointRec(GetMousePosition(), minR) &&
         IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
-      gTables[t].currentBill -=
-          gTables[t].items[i].price * gTables[t].items[i].qty;
-      for (int j = i; j < gTables[t].itemCount - 1; j++)
-        gTables[t].items[j] = gTables[t].items[j + 1];
-      gTables[t].itemCount--;
-      if (!gTables[t].itemCount) {
-        gTables[t].isOccupied = 0;
-        gTables[t].currentBill = 0;
+      gTables[t].currentBill -= gTables[t].items[i].price;
+      gTables[t].items[i].qty--;
+      if (gTables[t].items[i].qty <= 0) {
+        for (int j = i; j < gTables[t].itemCount - 1; j++)
+          gTables[t].items[j] = gTables[t].items[j + 1];
+        gTables[t].itemCount--;
+        if (!gTables[t].itemCount) {
+          gTables[t].isOccupied = 0;
+          gTables[t].currentBill = 0;
+        }
       }
+    }
+    /* Nút + (tăng số lượng) */
+    Rectangle plusR = {r.x + r.width - 26, r.y + r.height - 22, 22, 18};
+    DrawRectangleRounded(plusR, 0.4f, 4, CA_GOLD_DIM);
+    DrawTxtCenter("+", plusR, 14.f, WHITE, true);
+    if (CheckCollisionPointRec(GetMousePosition(), plusR) &&
+        IsMouseButtonReleased(MOUSE_LEFT_BUTTON)) {
+      gTables[t].items[i].qty++;
+      gTables[t].currentBill += gTables[t].items[i].price;
     }
   }
   EndScissorMode();
@@ -1251,6 +1342,8 @@ static void drawInvoice(void) {
   char ts3[32];
   strftime(ts3, 32, "%H:%M:%S  %d/%m/%Y", ti);
   char info[80];
+  sprintf(info, "Mã hóa đơn: HD#%04d", gNextInvoiceId);
+  DrawTxtL(info, ix + 32, py, 15.f, CA_GOLD); py += 28;
   sprintf(info, "Thời gian: %s", ts3);
   DrawTxtL(info, ix + 32, py, 15.f, CT_WHITE);
   py += 28;
@@ -1438,7 +1531,17 @@ static void drawMenuManage(void) {
         showToast("Vui lòng điền đầy đủ thông tin!", CS_WARN);
       else {
         float price = atof(gInp[1]);
-        if (gSubScr == 1) {
+        /* Kiểm tra trùng tên */
+        bool dupName = false;
+        for (int j = 0; j < gMenuCount; j++) {
+          if (gSubScr==2 && gMenu[j].id==gEditId) continue; /* bỏ qua chính nó khi sửa */
+          char nq2[2048],nt2[2048];
+          normalizeVN(gInp[0],nq2); normalizeVN(gMenu[j].name,nt2);
+          if (strcmp(nq2,nt2)==0) { dupName=true; break; }
+        }
+        if (dupName) {
+          showToast("Tên món đã tồn tại! Vui lòng chọn tên khác.", CS_ERR);
+        } else if (gSubScr == 1) {
           if (gMenuCount >= MAX_MENU)
             showToast("Danh sách đã đầy!", CS_ERR);
           else {
@@ -1475,15 +1578,29 @@ static void drawStaffManage(void) {
   int ax = SIDEBAR_W, ay = TOPBAR_H, aw = WW - ax, ah = WH - ay;
   DrawRectangle(ax, ay, aw, ah, CB_BG);
 
+  bool isAdmin = gCurrentStaff && (gCurrentStaff->id==100 ||
+    strcmp(gCurrentStaff->position,"Admin")==0 ||
+    strcmp(gCurrentStaff->position,"Quan ly")==0);
+
   if (gSubScr == 0) {
     InputField((Rectangle){ax + 14, ay + 12, 280, 36}, 0,
                "Tìm kiếm nhân viên...", 13);
-    if (Button((Rectangle){WW - 206, ay + 12, 190, 36}, "+ Thêm nhân viên",
-               CA_GOLD_DIM, CA_GOLD, 0)) {
-      gSubScr = 1;
-      memset(gInp, 0, sizeof(gInp));
-      memset(gInpLen, 0, sizeof(gInpLen));
-      memset(gInpPass, 0, sizeof(gInpPass));
+
+    /* Nút đổi mật khẩu — tất cả đều thấy */
+    if (Button((Rectangle){WW-400,ay+12,170,36},"Đổi mật khẩu",CB_CARD,CB_CARD_HOV,99)) {
+      memset(gInp,0,sizeof(gInp)); memset(gInpLen,0,sizeof(gInpLen));
+      memset(gInpPass,0,sizeof(gInpPass));
+      resetScreen(SCR_CHANGE_PW);
+    }
+    /* Nút thêm — chỉ quản lý */
+    if (isAdmin) {
+      if (Button((Rectangle){WW - 206, ay + 12, 190, 36}, "+ Thêm nhân viên",
+                 CA_GOLD_DIM, CA_GOLD, 0)) {
+        gSubScr = 1;
+        memset(gInp, 0, sizeof(gInp));
+        memset(gInpLen, 0, sizeof(gInpLen));
+        memset(gInpPass, 0, sizeof(gInpPass));
+      }
     }
 
     int hY = ay + 56;
@@ -1528,25 +1645,32 @@ static void drawStaffManage(void) {
       DrawTxtL(sh, ax + 620, ty, 18.f, CA_GOLD);
       int by = (int)(fy + (rowH - 26) * .5f);
       if (gStaff[i].id != 100) {
-        if (SmallBtn((Rectangle){ax + 756, by, 52, 26}, "Sửa", CB_CARD,
-                     CB_CARD_HOV, 20 + i * 2)) {
-          gSubScr = 2;
-          gEditId = gStaff[i].id;
-          strncpy(gInp[0], gStaff[i].username, 1019);
-          gInpLen[0] = (int)strlen(gInp[0]);
-          strncpy(gInp[2], gStaff[i].name, 1019);
-          gInpLen[2] = (int)strlen(gInp[2]);
-          strncpy(gInp[3], gStaff[i].position, 1019);
-          gInpLen[3] = (int)strlen(gInp[3]);
-          char sh2[24];
-          sprintf(sh2, "%.0f", gStaff[i].salaryPerHour);
-          strncpy(gInp[4], sh2, 1019);
-          gInpLen[4] = (int)strlen(gInp[4]);
+        /* Quản lý: Sửa/Xóa tất cả. Nhân viên: chỉ tự Sửa (không Xóa) */
+        bool canEdit = isAdmin || (gCurrentStaff && gStaff[i].id==gCurrentStaff->id);
+        bool canDelete = isAdmin;
+        if (canEdit) {
+          if (SmallBtn((Rectangle){ax + 756, by, 52, 26}, "Sửa", CB_CARD,
+                       CB_CARD_HOV, 20 + i * 2)) {
+            gSubScr = 2;
+            gEditId = gStaff[i].id;
+            strncpy(gInp[0], gStaff[i].username, 1019);
+            gInpLen[0] = (int)strlen(gInp[0]);
+            strncpy(gInp[2], gStaff[i].name, 1019);
+            gInpLen[2] = (int)strlen(gInp[2]);
+            strncpy(gInp[3], gStaff[i].position, 1019);
+            gInpLen[3] = (int)strlen(gInp[3]);
+            char sh2[24];
+            sprintf(sh2, "%.0f", gStaff[i].salaryPerHour);
+            strncpy(gInp[4], sh2, 1019);
+            gInpLen[4] = (int)strlen(gInp[4]);
+          }
         }
-        if (SmallBtn((Rectangle){ax + 812, by, 52, 26}, "Xóa",
-                     (Color){255, 120, 160, 255}, CS_ERR, 21 + i * 2)) {
-          openDialog("Xác nhận xóa", "Bạn có chắc muốn xóa nhân viên này?",
-                     200 + i);
+        if (canDelete) {
+          if (SmallBtn((Rectangle){ax + 812, by, 52, 26}, "Xoa",
+                       (Color){255, 120, 160, 255}, CS_ERR, 21 + i * 2)) {
+            openDialog("Xác nhận xóa", "Bạn có chắc muốn xóa nhân viên này?",
+                       200 + i);
+          }
         }
       } else {
         DrawTxtL("[Admin]", ax + 762, ty, 16.f, CT_DIM);
@@ -1639,270 +1763,404 @@ static void drawStaffManage(void) {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   THỐNG KÊ
+   LỊCH SỬ HÓA ĐƠN CHI TIẾT
 ═══════════════════════════════════════════════════════════════════ */
+static void drawInvoiceHist(void) {
+  drawSidebar();
+  drawTopBar("LỊCH SỬ HÓA ĐƠN");
+  int ax = SIDEBAR_W, ay = TOPBAR_H, aw = WW-ax, ah = WH-ay;
+  DrawRectangle(ax, ay, aw, ah, CB_BG);
+
+  bool isAdmin = gCurrentStaff && (gCurrentStaff->id == 100 ||
+    strcmp(gCurrentStaff->position,"Admin")==0 ||
+    strcmp(gCurrentStaff->position,"Quan ly")==0);
+
+  /* Header */
+  if (Button((Rectangle){ax+16,ay+14,120,38},"< Quay lai",CB_CARD,CB_CARD_HOV,95))
+    resetScreen(SCR_STATS);
+
+  /* Table header */
+  int hY2 = ay+64;
+  DrawRectangle(ax, hY2, aw, 36, CB_PANEL);
+  DrawRectangle(ax, hY2+36, aw, 1, CB_BORDER);
+  struct { const char *l; int x; } hcols2[] = {
+    {"Mã HD",ax+12},{"Ngày",ax+100},{"Giờ",ax+210},
+    {"Bàn",ax+290},{"Thủ ngân",ax+350},{"Tổng tiền",ax+580}
+  };
+  for (int i=0;i<6;i++)
+    DrawTextEx(gFontB,hcols2[i].l,(Vector2){hcols2[i].x,hY2+10},15.f,1.f,CT_MUTED);
+
+  /* Đọc file */
+  int rowH2=46, startY2=hY2+38, visH2=ah-100;
+  Rectangle la2={(float)ax,(float)startY2,(float)aw,(float)visH2};
+
+  /* Đếm số dòng để tính scroll */
+  int lineCount=0;
+  FILE *fc=fopen("tongdoanhthu.txt","r");
+  if (fc) { char tmp[256]; while(fgets(tmp,256,fc)) if(strlen(tmp)>5) lineCount++; fclose(fc); }
+  updateScroll(la2,(float)(lineCount*rowH2));
+
+  FILE *fh=fopen("tongdoanhthu.txt","r");
+  if (!fh) {
+    DrawTxtL("Chưa có dữ liệu.",ax+24,startY2+16,16.f,CT_DIM);
+    return;
+  }
+  BeginScissorMode(ax,startY2,aw,visH2);
+  char line3[256]; int li2=0; float totalFilter=0;
+  while(fgets(line3,256,fh)) {
+    if (strlen(line3)<5) continue;
+    line3[strcspn(line3,"\n")]=0;
+
+    /* Parse: DD/MM/YYYY|HD#XXXX|BanX|NV|amount */
+    char date3[12]={0},hdcode[12]={0},ban3[8]={0},nv3[STR_LEN]={0};
+    float amt3=0;
+    int dd3=0,mm3=0,yyyy3=0;
+    char tmp2[256]; strncpy(tmp2,line3,255);
+    char *tok=strtok(tmp2,"|");
+    if (!tok) continue; strncpy(date3,tok,11);
+    sscanf(date3,"%d/%d/%d",&dd3,&mm3,&yyyy3);
+    tok=strtok(NULL,"|"); if(!tok) continue; strncpy(hdcode,tok,11);
+    tok=strtok(NULL,"|"); if(!tok) continue; strncpy(ban3,tok,7);
+    tok=strtok(NULL,"|"); if(!tok) continue; strncpy(nv3,tok,STR_LEN-1);
+    tok=strtok(NULL,"|"); if(!tok) continue; sscanf(tok,"%f",&amt3);
+
+    /* Nhân viên chỉ thấy hóa đơn của mình */
+    if (!isAdmin && gCurrentStaff && strcmp(nv3,gCurrentStaff->name)!=0) continue;
+
+    totalFilter += amt3;
+    float fy2=(float)(startY2+li2*rowH2)-gScrollY;
+    if (fy2+rowH2 >= startY2 && fy2 <= startY2+visH2) {
+      Color rbg2=(li2%2==0)?CB_PANEL:CB_ROW_ALT;
+      DrawRectangle(ax,(int)fy2,aw,rowH2,rbg2);
+      DrawLine(ax,(int)(fy2+rowH2-1),ax+aw,(int)(fy2+rowH2-1),CB_BORDER);
+      float ty2=fy2+(rowH2-16)*.5f;
+      DrawTxtL(hdcode,ax+12,ty2,15.f,CA_GOLD);
+      DrawTxtL(date3,ax+100,ty2,15.f,CT_WHITE);
+      DrawTxtL(ban3,ax+290,ty2,15.f,CT_MUTED);
+      DrawTxtL(nv3,ax+350,ty2,15.f,CT_WHITE);
+      char amts[24]; sprintf(amts,"%.0f VND",amt3);
+      Vector2 av2=Measure(amts,15);
+      DrawTxtL(amts,ax+aw-av2.x-20,ty2,15.f,CA_GOLD);
+    }
+    li2++;
+  }
+  fclose(fh);
+  EndScissorMode();
+
+  /* Footer tổng */
+  DrawRectangle(ax,ay+ah-44,aw,44,CB_PANEL);
+  DrawRectangle(ax,ay+ah-44,aw,1,CB_BORDER2);
+  char fsum[64]; sprintf(fsum,"Tổng: %.0f VND  (%d hóa đơn)",totalFilter,li2);
+  DrawTextEx(gFontB,fsum,(Vector2){ax+aw-Measure(fsum,18).x-20,ay+ah-30},18.f,1.f,CA_GOLD);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   THỐNG KÊ DOANH THU
+═══════════════════════════════════════════════════════════════════ */
+
+/* Parse dòng mới: DD/MM/YYYY|HD#XXXX|BanX|NV|amount */
+static float parseLineAmount(const char *line) {
+  const char *p = strrchr(line, '|');
+  if (!p) {
+    const char *c2 = strrchr(line, ':');
+    if (!c2) return -1;
+    float v = 0; if (sscanf(c2+1," %f",&v)==1) return v; return -1;
+  }
+  float v = 0; if (sscanf(p+1," %f",&v)==1) return v; return -1;
+}
+
+typedef struct { char label[20]; float total; } RevBar;
 static void drawStats(void) {
   drawSidebar();
   drawTopBar("THỐNG KÊ DOANH THU & NHÂN SỰ");
-  int ax = SIDEBAR_W, ay = TOPBAR_H, aw = WW - ax, ah = WH - ay;
+  int ax = SIDEBAR_W, ay = TOPBAR_H, aw = WW-ax, ah = WH-ay;
   DrawRectangle(ax, ay, aw, ah, CB_BG);
 
-  int occ = 0;
-  float liveBill = 0;
-  for (int i = 0; i < MAX_TABLES; i++)
-    if (gTables[i].isOccupied) {
-      occ++;
-      liveBill += gTables[i].currentBill;
-    }
+  bool isAdmin = gCurrentStaff && (gCurrentStaff->id==100 ||
+    strcmp(gCurrentStaff->position,"Admin")==0 ||
+    strcmp(gCurrentStaff->position,"Quan ly")==0);
 
-  /* KPI cards */
-  struct {
-    const char *lbl, *sub;
-    float val;
-    const char *unit;
-    Color col;
-  } kpis[] = {
-      {"Tổng Doanh Thu", "Đã thanh toán", gTotalRevenue, "  VND", CA_GOLD},
-      {"Tạm Thu Hiện Tại", "Đang phục vụ", liveBill, "  VND", CS_OK},
-      {"Bàn Đang Dùng", "Trong 10 bàn", (float)occ, " / 10", CS_INFO},
-  };
-  int kw = (aw - 64) / 3, kh = 120;
-  for (int i = 0; i < 3; i++) {
-    Rectangle kr = {(float)(ax + 16 + i * (kw + 16)), (float)(ay + 14),
-                    (float)kw, (float)kh};
-    DrawRectangleRounded(kr, 0.1f, 8, CB_PANEL);
-    DrawRectangle((int)kr.x, (int)kr.y, 4, kh, kpis[i].col);
-    DrawTxtL(kpis[i].lbl, kr.x + 18, kr.y + 16, 17.f, CT_MUTED);
-    char vs[48];
-    sprintf(vs, "%.0f", kpis[i].val);
-    char full[64];
-    sprintf(full, "%s%s", vs, kpis[i].unit);
-    DrawTextEx(gFontB, full, (Vector2){kr.x + 18, kr.y + 46}, 22.f, 1.f,
-               kpis[i].col);
-    DrawTxtL(kpis[i].sub, kr.x + 16, kr.y + 72, 15.f, CT_DIM);
+  /* Nút xem lịch sử hóa đơn */
+  if (Button((Rectangle){WW-210,ay+14,190,40},"Xem lich su HD",CA_GOLD_DIM,CA_GOLD,94))
+    resetScreen(SCR_INVOICE_HIST);
+
+  int occ=0; float liveBill=0;
+  for (int i=0;i<MAX_TABLES;i++) if(gTables[i].isOccupied){occ++;liveBill+=gTables[i].currentBill;}
+
+  /* Tính doanh thu từ file theo kỳ */
+  time_t now3=time(NULL); struct tm *ti3=localtime(&now3);
+  int curDay=ti3->tm_mday,curMon=ti3->tm_mon+1,curYear=ti3->tm_year+1900;
+  int curQu=(curMon-1)/3+1;
+  float revDay=0,revMon=0,revQu=0,revYear=0;
+  FILE *fs2=fopen("tongdoanhthu.txt","r");
+  if (fs2) {
+    char line4[256];
+    while(fgets(line4,256,fs2)){
+      if(strlen(line4)<10) continue;
+      int dd4=0,mm4=0,yyyy4=0;
+      sscanf(line4,"%d/%d/%d",&dd4,&mm4,&yyyy4);
+      if(!yyyy4) continue;
+      float amt4=parseLineAmount(line4);
+      if(amt4<0) continue;
+      if(yyyy4==curYear){
+        revYear+=amt4;
+        if(mm4==curMon){revMon+=amt4;if(dd4==curDay)revDay+=amt4;}
+        if((mm4-1)/3+1==curQu) revQu+=amt4;
+      }
+    }
+    fclose(fs2);
   }
+
+  /* KPI cards — 4 kỳ */
+  struct { const char *lbl,*sub; float val; Color col; } kpis2[]={
+    {"Hôm nay","Doanh thu ngày",revDay,CS_INFO},
+    {"Tháng này","Doanh thu tháng",revMon,CS_OK},
+    {"Quý này","Doanh thu quý",revQu,CA_GOLD},
+    {"Năm này","Doanh thu năm",revYear,CS_ERR},
+  };
+  int kw2=(aw-80)/4, kh2=110;
+  for (int i=0;i<4;i++){
+    Rectangle kr2={(float)(ax+16+i*(kw2+16)),(float)(ay+14),(float)kw2,(float)kh2};
+    DrawRectangleRounded(kr2,0.1f,8,CB_PANEL);
+    DrawRectangle((int)kr2.x,(int)kr2.y,4,kh2,kpis2[i].col);
+    DrawTxtL(kpis2[i].lbl,kr2.x+14,kr2.y+12,16.f,CT_MUTED);
+    char vs3[48]; sprintf(vs3,"%.0f VND",kpis2[i].val);
+    DrawTextEx(gFontB,vs3,(Vector2){kr2.x+14,kr2.y+40},18.f,1.f,kpis2[i].col);
+    DrawTxtL(kpis2[i].sub,kr2.x+14,kr2.y+68,13.f,CT_DIM);
+  }
+
+  /* Doanh thu theo nhân viên (runtime + file cashier) */
+  int cashY=ay+136;
+  DrawRectangle(ax+14,cashY,aw-28,32,CB_PANEL);
+  DrawTxtBL("DOANH THU THEO THU NGÂN",ax+24,cashY+8,17.f,CT_MUTED);
+  cashY+=34;
+  /* Header */
+  DrawRectangle(ax+14,cashY,aw-28,32,CB_ROW_ALT);
+  DrawTxtL("Nhân viên",ax+24,cashY+8,14.f,CT_MUTED);
+  DrawTxtL("Số HĐ",ax+380,cashY+8,14.f,CT_MUTED);
+  DrawTxtL("Doanh thu trong ngày",ax+500,cashY+8,14.f,CT_MUTED);
+  cashY+=32;
+
+  int showCount=0;
+  for (int i=0;i<gStaffRevCount&&showCount<6;i++){
+    if (!isAdmin && gCurrentStaff && gStaffRev[i].staffId!=gCurrentStaff->id) continue;
+    Color rbg3=(showCount%2==0)?CB_PANEL:CB_ROW_ALT;
+    DrawRectangle(ax+14,cashY,aw-28,38,rbg3);
+    DrawTxtL(gStaffRev[i].staffName,ax+24,cashY+10,15.f,CT_WHITE);
+    char hdc[8]; sprintf(hdc,"%d",gStaffRev[i].invoiceCount);
+    DrawTxtL(hdc,ax+380,cashY+10,15.f,CT_MUTED);
+    char revc[32]; sprintf(revc,"%.0f VND",gStaffRev[i].todayRevenue);
+    DrawTxtL(revc,ax+500,cashY+10,15.f,CA_GOLD);
+    cashY+=38; showCount++;
+  }
+  if (!gStaffRevCount) DrawTxtL("Chưa có giao dịch trong phiên này.",ax+24,cashY+8,15.f,CT_DIM);
 
   /* Trạng thái bàn */
-  int gridY = ay + 128;
-  DrawRectangle(ax + 14, gridY, aw - 28, 32, CB_PANEL);
-  DrawTxtBL("TRẠNG THÁI CÁC BÀN", ax + 24, gridY + 10, 17.f, CT_MUTED);
-  gridY += 34;
-  int tcols = 5, tw2 = (aw - 28) / tcols, th3 = 100;
-  for (int i = 0; i < MAX_TABLES; i++) {
-    int col = i % tcols, row = i / tcols;
-    Rectangle tr = {(float)(ax + 14 + col * tw2),
-                    (float)(gridY + row * (th3 + 4)), (float)(tw2 - 4),
-                    (float)th3};
-    bool occ2 = gTables[i].isOccupied;
-    Color tbg =
-        occ2 ? (Color){255, 225, 235, 255} : (Color){225, 245, 235, 255};
-    DrawRectangleRounded(tr, 0.12f, 6, tbg);
-    Color sc2 = occ2 ? CS_ERR : CS_OK;
-    DrawRectangleRoundedLines(tr, 0.12f, 6, sc2);
-    char tn[16];
-    sprintf(tn, "Bàn %02d", gTables[i].id);
-    Vector2 tnv = Measure(tn, 16.f);
-    DrawTxtL(tn, tr.x + (tr.width - tnv.x) * .5f, tr.y + 6, 16.f, CT_WHITE);
-    if (occ2) {
-      char bs[24];
-      sprintf(bs, "%.0f VND", gTables[i].currentBill);
-      Vector2 bv = MeasureB(bs, 18.f);
-      DrawTextEx(gFontB, bs,
-                 (Vector2){tr.x + (tr.width - bv.x) * .5f, tr.y + 36}, 18.f,
-                 1.f, CA_GOLD);
+  int gridY=cashY+50;
+  DrawRectangle(ax+14,gridY,aw-28,32,CB_PANEL);
+  DrawTxtBL("TRẠNG THÁI CÁC BÀN",ax+24,gridY+8,17.f,CT_MUTED);
+  gridY+=34;
+  int tcols=5,tw4=(aw-28)/tcols,th5=90;
+  for (int i=0;i<MAX_TABLES;i++){
+    int col2=i%tcols,row2=i/tcols;
+    Rectangle tr3={(float)(ax+14+col2*tw4),(float)(gridY+row2*(th5+4)),(float)(tw4-4),(float)th5};
+    bool occ3=gTables[i].isOccupied;
+    Color tbg3=occ3?(Color){255,225,235,255}:(Color){225,245,235,255};
+    DrawRectangleRounded(tr3,0.12f,6,tbg3);
+    Color sc3=occ3?CS_ERR:CS_OK;
+    DrawRectangleRoundedLines(tr3,0.12f,6,sc3);
+    char tn2[16]; sprintf(tn2,"Bàn %02d",gTables[i].id);
+    Vector2 tnv2=Measure(tn2,15.f);
+    DrawTxtL(tn2,tr3.x+(tr3.width-tnv2.x)*.5f,tr3.y+6,15.f,CT_WHITE);
+    if (occ3){
+      char bs2[24]; sprintf(bs2,"%.0f VND",gTables[i].currentBill);
+      Vector2 bv2=MeasureB(bs2,16.f);
+      DrawTextEx(gFontB,bs2,(Vector2){tr3.x+(tr3.width-bv2.x)*.5f,tr3.y+32},16.f,1.f,CA_GOLD);
     } else {
-      Vector2 fv = Measure("Trống", 16.f);
-      DrawTxtL("Trống", tr.x + (tr.width - fv.x) * .5f, tr.y + 36, 16.f, sc2);
+      Vector2 fv2=Measure("Trống",15.f);
+      DrawTxtL("Trống",tr3.x+(tr3.width-fv2.x)*.5f,tr3.y+32,15.f,sc3);
     }
-  }
-
-  /* Lịch sử */
-  int histY = gridY + 2 * (th3 + 4) + 10;
-  DrawRectangle(ax + 14, histY, aw - 28, 32, CB_PANEL);
-  DrawTxtBL("LỊCH SỬ HÓA ĐƠN GẦN ĐÂY", ax + 24, histY + 10, 17.f, CT_MUTED);
-  histY += 34;
-  FILE *fr = fopen("tongdoanhthu.txt", "r");
-  if (fr) {
-    char line[256];
-    int li = 0;
-    while (fgets(line, 256, fr) && li < 7) {
-      line[strcspn(line, "\n")] = 0;
-      Color lbg = (li % 2 == 0) ? CB_PANEL : CB_ROW_ALT;
-      DrawRectangle(ax + 14, histY + li * 40, aw - 28, 39, lbg);
-      DrawTxtL(line, ax + 24, histY + li * 40 + 10, 19.f, CT_WHITE);
-      li++;
-    }
-    fclose(fr);
-  } else {
-    DrawTxtL("Chưa có dữ liệu hóa đơn.", ax + 24, histY + 10, 16.f, CT_DIM);
   }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
    BIỂU ĐỒ DOANH THU
 ═══════════════════════════════════════════════════════════════════ */
-static void drawChart(void) {
-  drawSidebar();
-  drawTopBar("BIỂU ĐỒ DOANH THU THEO NGÀY");
-  int ax = SIDEBAR_W, ay = TOPBAR_H, aw = WW - ax, ah = WH - ay;
-  DrawRectangle(ax, ay, aw, ah, CB_BG);
+static int gChartTab = 0; /* 0=ngày, 1=tháng, 2=quý, 3=năm */
 
-  typedef struct {
-    char date[15];
-    float total;
-  } DayRev;
-  DayRev data[30];
-  int dc = 0;
-  FILE *fp = fopen("tongdoanhthu.txt", "r");
-  if (fp) {
-    char line[256];
-    while (fgets(line, 256, fp)) {
-      /* Lấy ngày: 10 ký tự đầu dạng DD/MM/YYYY */
-      char dt[15] = {0};
-      if (strlen(line) < 10)
-        continue;
-      strncpy(dt, line, 10);
-      dt[10] = 0;
-      /* Kiểm tra định dạng ngày DD/MM/YYYY */
-      if (dt[2] != '/' || dt[5] != '/')
-        continue;
-      /* Tìm số tiền: tìm chuỗi con ": " rồi đọc số sau đó */
-      char *colon = strrchr(line, ':');
-      if (!colon)
-        continue;
-      float amt = 0;
-      if (sscanf(colon + 1, " %f", &amt) != 1)
-        continue;
-      bool found3 = false;
-      for (int i = 0; i < dc; i++)
-        if (strcmp(data[i].date, dt) == 0) {
-          data[i].total += amt;
-          found3 = true;
-          break;
-        }
-      if (!found3 && dc < 30) {
-        strcpy(data[dc].date, dt);
-        data[dc].total = amt;
-        dc++;
-      }
-    }
-    fclose(fp);
-  }
-  if (!dc) {
-    Vector2 nv = Measure("Chua co du lieu de ve bieu do.", 16);
-    DrawTxtL("Chua co du lieu de ve bieu do.", ax + (aw - nv.x) * .5f,
-             ay + ah * .5f - 8, 16.f, CT_DIM);
-    return;
-  }
-
-  /* Tính tổng toàn bộ từ file (không phụ thuộc gTotalRevenue runtime) */
-  float totalAllTime = 0;
-  float maxRev = 0;
-  for (int i = 0; i < dc; i++) {
-    totalAllTime += data[i].total;
-    if (data[i].total > maxRev)
-      maxRev = data[i].total;
-  }
-  if (maxRev < 1)
-    maxRev = 1;
-
-  /* Chỉ hiện tối đa 10 ngày gần nhất để tránh nhãn đè lên nhau */
-  int maxBars = 10;
-  int startBar = 0;
-  if (dc > maxBars)
-    startBar = dc - maxBars;
-  int visibleDc = dc - startBar;
-
-  int chartX = ax + 70, chartY = ay + 40, chartW = aw - 110, chartH = ah - 150;
+static void drawChartBars(int ax, int ay, int aw, int ah,
+                          RevBar *data, int dc, float maxRev, float totalAll) {
+  int chartX = ax + 80, chartY = ay + 100;
+  int chartW = aw - 120, chartH = ah - 200;
 
   /* Lưới ngang */
   for (int g = 0; g <= 5; g++) {
-    int gy = chartY + chartH - g * (chartH / 5);
-    DrawLine(chartX, gy, chartX + chartW, gy, CB_BORDER);
-    char lbl[32];
-    sprintf(lbl, "%.0f", g * (maxRev / 5.f));
+    int gy2 = chartY + chartH - g * (chartH / 5);
+    DrawLine(chartX, gy2, chartX + chartW, gy2, CB_BORDER);
+    char lbl[32]; sprintf(lbl, "%.0f", g * (maxRev / 5.f));
     Vector2 lv = Measure(lbl, 13);
-    DrawTxtL(lbl, chartX - lv.x - 6, gy - 7, 13.f, CT_DIM);
+    DrawTxtL(lbl, chartX - lv.x - 6, gy2 - 7, 13.f, CT_DIM);
   }
+  DrawLine(chartX, chartY, chartX, chartY+chartH, CB_BORDER2);
+  DrawLine(chartX, chartY+chartH, chartX+chartW, chartY+chartH, CB_BORDER2);
 
-  /* Cột */
-  int bw = fmaxf(24, (chartW - visibleDc * 10) / visibleDc);
-  int bg2 = (chartW - visibleDc * bw) / (visibleDc + 1);
-  for (int i = 0; i < visibleDc; i++) {
-    int di = startBar + i; /* index thực trong mảng data */
-    int bx = chartX + bg2 + i * (bw + bg2);
-    int bh = (int)((data[di].total / maxRev) * chartH);
-    int by = chartY + chartH - bh;
+  if (!dc) {
+    Vector2 nv = Measure("Chưa có dữ liệu.", 16);
+    DrawTxtL("Chưa có dữ liệu.", ax+(aw-nv.x)*.5f, ay+ah*.5f-8, 16.f, CT_DIM);
+    return;
+  }
+  int maxBars = 12;
+  int startBar = dc > maxBars ? dc - maxBars : 0;
+  int vis = dc - startBar;
+  int bw2 = fmaxf(20, (chartW - vis*10) / vis);
+  int bgap = (chartW - vis*bw2) / (vis+1);
 
-    /* gradient cột */
-    for (int h2 = 0; h2 < bh; h2++) {
-      float r = (float)h2 / bh;
+  for (int i = 0; i < vis; i++) {
+    int di = startBar + i;
+    int bx2 = chartX + bgap + i*(bw2+bgap);
+    int bh2 = maxRev>0 ? (int)((data[di].total/maxRev)*chartH) : 0;
+    int by2 = chartY + chartH - bh2;
+
+    for (int h2 = 0; h2 < bh2; h2++) {
+      float r2 = (float)h2/bh2;
       Color bc = {
-          (unsigned char)(CA_GOLD_DIM.r + (CA_GOLD.r - CA_GOLD_DIM.r) * r),
-          (unsigned char)(CA_GOLD_DIM.g + (CA_GOLD.g - CA_GOLD_DIM.g) * r),
-          (unsigned char)(CA_GOLD_DIM.b + (CA_GOLD.b - CA_GOLD_DIM.b) * r),
-          215};
-      DrawRectangle(bx, by + bh - h2, bw, 1, bc);
+        (unsigned char)(CA_GOLD_DIM.r+(CA_GOLD.r-CA_GOLD_DIM.r)*r2),
+        (unsigned char)(CA_GOLD_DIM.g+(CA_GOLD.g-CA_GOLD_DIM.g)*r2),
+        (unsigned char)(CA_GOLD_DIM.b+(CA_GOLD.b-CA_GOLD_DIM.b)*r2), 215};
+      DrawRectangle(bx2, by2+bh2-h2, bw2, 1, bc);
     }
-    /* glow đỉnh */
-    DrawRectangle(bx, by, bw, 4, CA_GOLD_LITE);
+    if (bh2>0) DrawRectangle(bx2, by2, bw2, 4, CA_GOLD_LITE);
 
-    /* nhãn ngày — xoay 45 độ nếu cột hẹp */
-    int labelX = bx + bw / 2;
-    int labelY = chartY + chartH + 10;
-    if (bw >= 60) {
-      /* đủ rộng: vẽ ngang */
-      Vector2 dv = Measure(data[di].date, 12);
-      DrawTxtL(data[di].date, labelX - (int)(dv.x * .5f), labelY, 12.f,
-               CT_MUTED);
+    /* nhãn */
+    if (bw2 >= 50) {
+      Vector2 dv2 = Measure(data[di].label, 12);
+      DrawTxtL(data[di].label, bx2+(bw2-dv2.x)*.5f, chartY+chartH+10, 12.f, CT_MUTED);
     } else {
-      /* hẹp: vẽ xoay 45 độ */
-      DrawTextPro(gFont, data[di].date, (Vector2){(float)labelX, (float)labelY},
-                  (Vector2){0, 0}, 45.f, 12.f, 1.f, CT_MUTED);
+      DrawTextPro(gFont, data[di].label,
+        (Vector2){(float)bx2, (float)(chartY+chartH+10)},
+        (Vector2){0,0}, 45.f, 12.f, 1.f, CT_MUTED);
     }
-
-    /* giá trị trên đỉnh */
-    if (bh > 20) {
-      char vs[24];
-      sprintf(vs, "%.0f", data[di].total);
-      Vector2 vv = Measure(vs, 12);
-      DrawTxtL(vs, bx + (bw - (int)vv.x) / 2, by - 16, 12.f, CA_GOLD_LITE);
+    if (bh2>20) {
+      char vs2[24]; sprintf(vs2,"%.0f",data[di].total);
+      Vector2 vv2=Measure(vs2,11);
+      DrawTxtL(vs2,bx2+(bw2-(int)vv2.x)/2,by2-16,11.f,CA_GOLD_LITE);
     }
-
-    /* tooltip hover */
-    Rectangle br = {(float)bx, (float)by, (float)bw, (float)bh};
-    if (CheckCollisionPointRec(GetMousePosition(), br)) {
-      DrawRectangleRounded((Rectangle){bx - 18, by - 52, 148, 44}, 0.2f, 6,
-                           CB_PANEL);
-      DrawRectangleRoundedLines((Rectangle){bx - 18, by - 52, 148, 44}, 0.2f, 6,
-                                CB_BORDER2);
-      DrawTxtL(data[di].date, bx - 14, by - 48, 13.f, CT_MUTED);
-      char amt[32];
-      sprintf(amt, "%.0f VND", data[di].total);
-      DrawTextEx(gFontB, amt, (Vector2){bx - 14, by - 32}, 15.f, 1.f, CA_GOLD);
+    /* tooltip */
+    Rectangle br2={(float)bx2,(float)by2,(float)bw2,(float)bh2};
+    if (CheckCollisionPointRec(GetMousePosition(),br2)) {
+      DrawRectangleRounded((Rectangle){bx2-18,by2-52,160,44},0.2f,6,CB_PANEL);
+      DrawRectangleRoundedLines((Rectangle){bx2-18,by2-52,160,44},0.2f,6,CB_BORDER2);
+      DrawTxtL(data[di].label,bx2-14,by2-48,13.f,CT_MUTED);
+      char amt2[32]; sprintf(amt2,"%.0f VND",data[di].total);
+      DrawTextEx(gFontB,amt2,(Vector2){bx2-14,by2-32},15.f,1.f,CA_GOLD);
     }
   }
-
-  /* Ghi chú nếu có nhiều ngày hơn đang hiện */
-  if (dc > maxBars) {
-    char note[64];
-    sprintf(note, "(Hien %d/%d ngay gan nhat)", visibleDc, dc);
-    Vector2 nv2 = Measure(note, 13);
-    DrawTxtL(note, ax + (aw - nv2.x) * .5f, chartY - 20, 13.f, CT_DIM);
-  }
-
-  /* Trục */
-  DrawLine(chartX, chartY, chartX, chartY + chartH, CB_BORDER2);
-  DrawLine(chartX, chartY + chartH, chartX + chartW, chartY + chartH,
-           CB_BORDER2);
-
   /* Tổng */
-  char sumStr[64];
-  sprintf(sumStr, "Tong tat ca:  %.0f VND", totalAllTime);
-  Vector2 sv4 = MeasureB(sumStr, 17);
-  DrawTextEx(gFontB, sumStr,
-             (Vector2){ax + (aw - sv4.x) * .5f, chartY + chartH + 70}, 17.f,
-             1.f, CA_GOLD);
+  char sumStr[80]; sprintf(sumStr,"Tổng: %.0f VND",totalAll);
+  Vector2 sv5=MeasureB(sumStr,17);
+  DrawTextEx(gFontB,sumStr,(Vector2){ax+(aw-sv5.x)*.5f,chartY+chartH+80},17.f,1.f,CA_GOLD);
+}
+
+static void drawChart(void) {
+  drawSidebar();
+  const char *titles[] = {"THEO NGÀY","THEO THÁNG","THEO QUÝ","THEO NĂM"};
+  char topTitle[64]; sprintf(topTitle,"BIỂU ĐỒ DOANH THU %s",titles[gChartTab]);
+  drawTopBar(topTitle);
+  int ax = SIDEBAR_W, ay = TOPBAR_H, aw = WW-ax, ah = WH-ay;
+  DrawRectangle(ax, ay, aw, ah, CB_BG);
+
+  /* Tab bar */
+  const char *tabLbls[] = {"Theo Ngày","Theo Tháng","Theo Quý","Theo Năm"};
+  int tw3 = 160, th4 = 38, tx2 = ax+24, ty2 = ay+16;
+  for (int i = 0; i < 4; i++) {
+    Rectangle tr2 = {(float)(tx2+i*(tw3+8)),(float)ty2,(float)tw3,(float)th4};
+    bool isAct2 = (gChartTab == i);
+    Color tbg2 = isAct2 ? CA_GOLD : CB_CARD;
+    Color thov2 = isAct2 ? CA_GOLD : CB_CARD_HOV;
+    if (Button(tr2, tabLbls[i], tbg2, thov2, 90+i)) gChartTab = i;
+  }
+
+  /* Đọc và phân nhóm dữ liệu */
+  RevBar data[60]; int dc2=0;
+  float totalAll2=0, maxRev2=0;
+
+  FILE *fp2 = fopen("tongdoanhthu.txt","r");
+  if (fp2) {
+    char line2[256];
+    while (fgets(line2,256,fp2)) {
+      if (strlen(line2)<10) continue;
+      /* Ngày: DD/MM/YYYY ở đầu dòng */
+      if (line2[2]!='/' || line2[5]!='/') continue;
+      int dd=0,mm=0,yyyy=0;
+      sscanf(line2,"%d/%d/%d",&dd,&mm,&yyyy);
+      if (!yyyy) continue;
+      float amt2 = parseLineAmount(line2);
+      if (amt2 < 0) continue;
+
+      char label2[20]={0};
+      if (gChartTab==0) sprintf(label2,"%02d/%02d",dd,mm);
+      else if (gChartTab==1) sprintf(label2,"T%02d/%d",mm,yyyy);
+      else if (gChartTab==2) sprintf(label2,"Q%d/%d",(mm-1)/3+1,yyyy);
+      else sprintf(label2,"%d",yyyy);
+
+      bool found4=false;
+      for (int i=0;i<dc2;i++) if(strcmp(data[i].label,label2)==0){data[i].total+=amt2;found4=true;break;}
+      if (!found4&&dc2<60){strcpy(data[dc2].label,label2);data[dc2].total=amt2;dc2++;}
+      totalAll2+=amt2;
+    }
+    fclose(fp2);
+  }
+  for (int i=0;i<dc2;i++) if(data[i].total>maxRev2) maxRev2=data[i].total;
+  if (maxRev2<1) maxRev2=1;
+
+  drawChartBars(ax,ay,aw,ah,data,dc2,maxRev2,totalAll2);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   ĐỔI MẬT KHẨU
+═══════════════════════════════════════════════════════════════════ */
+static void drawChangePw(void) {
+  drawSidebar();
+  drawTopBar("ĐỔI MẬT KHẨU");
+  int ax=SIDEBAR_W,ay=TOPBAR_H,aw=WW-ax,ah=WH-ay;
+  DrawRectangle(ax,ay,aw,ah,CB_BG);
+
+  int fw=520,fh=370;
+  int fx=(aw-fw)/2+ax, fy=ay+80;
+  DrawRectangleRounded((Rectangle){fx,fy,fw,fh},0.16f,12,CB_PANEL);
+  DrawRectangleRoundedLines((Rectangle){fx,fy,fw,fh},0.16f,12,CB_BORDER);
+  Vector2 ftv2=MeasureB("ĐỔI MẬT KHẨU",17);
+  DrawTextEx(gFontB,"ĐỔI MẬT KHẨU",(Vector2){fx+(fw-ftv2.x)*.5f,fy+14},17.f,1.f,CA_GOLD);
+  DrawLine(fx+20,fy+46,fx+fw-20,fy+46,CB_BORDER);
+
+  int px2=fx+28,pw2=fw-56;
+  DrawTxtL("Mật khẩu hiện tại:",px2,fy+56,15.f,CT_MUTED);
+  gInpPass[0]=true;
+  InputField((Rectangle){px2,fy+76,pw2,42},0,"Mật khẩu cũ...",14);
+  DrawTxtL("Mật khẩu mới:",px2,fy+136,15.f,CT_MUTED);
+  gInpPass[1]=true;
+  InputField((Rectangle){px2,fy+156,pw2,42},1,"Mật khẩu mới...",14);
+  DrawTxtL("Xác nhận mật khẩu mới:",px2,fy+216,15.f,CT_MUTED);
+  gInpPass[2]=true;
+  InputField((Rectangle){px2,fy+236,pw2,42},2,"Nhập lại mật khẩu mới...",14);
+
+  bool sv2=Button((Rectangle){px2,fy+298,(float)(pw2/2-8),44},"[S] Lưu",CA_GOLD_DIM,CA_GOLD,1);
+  bool cl2=Button((Rectangle){px2+pw2/2+8,fy+298,(float)(pw2/2-8),44},"[X] Hủy",CB_CARD,CB_CARD_HOV,2);
+  if (cl2) resetScreen(SCR_STAFF);
+  if (sv2) {
+    if (!gInpLen[0]||!gInpLen[1]||!gInpLen[2])
+      showToast("Vui lòng điền đầy đủ!",CS_WARN);
+    else if (strcmp(gInp[1],gInp[2])!=0)
+      showToast("Mật khẩu mới không khớp!",CS_ERR);
+    else if (!gCurrentStaff||strcmp(gCurrentStaff->password,gInp[0])!=0)
+      showToast("Mật khẩu hiện tại sai!",CS_ERR);
+    else {
+      strncpy(gCurrentStaff->password,gInp[1],SHORT_STR-1);
+      saveStaff();
+      showToast("Đã đổi mật khẩu thành công!",CS_OK);
+      resetScreen(SCR_STAFF);
+    }
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════
@@ -2050,6 +2308,7 @@ int main(void) {
   /* Khởi tạo dữ liệu */
   loadStaff();
   loadMenu();
+  loadInvoiceId();
   for (int i = 0; i < MAX_TABLES; i++) {
     gTables[i].id = i + 1;
     gTables[i].isOccupied = 0;
@@ -2096,6 +2355,12 @@ int main(void) {
       break;
     case SCR_CHART:
       drawChart();
+      break;
+    case SCR_INVOICE_HIST:
+      drawInvoiceHist();
+      break;
+    case SCR_CHANGE_PW:
+      drawChangePw();
       break;
     }
 
