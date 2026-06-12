@@ -19,6 +19,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#ifdef _WIN32
+#include <direct.h>   /* _mkdir */
+#define MKDIR(p) _mkdir(p)
+#else
+#include <sys/stat.h>
+#define MKDIR(p) mkdir(p, 0755)
+#endif
 
 /* ═══════════════════════════════════════════════════════════════════
    HẰNG SỐ
@@ -462,15 +469,29 @@ save_cashier:;
   }
 }
 
+
+/* Tạo thư mục lưu hóa đơn theo cấu trúc hoadon/YYYY/QX/MM/ */
+static void ensureInvoiceDir(int yyyy, int mm) {
+  int quarter = (mm - 1) / 3 + 1;
+  char path[128];
+  MKDIR("hoadon");
+  sprintf(path, "hoadon/%04d", yyyy);         MKDIR(path);
+  sprintf(path, "hoadon/%04d/Q%d", yyyy, quarter); MKDIR(path);
+  sprintf(path, "hoadon/%04d/Q%d/%02d", yyyy, quarter, mm); MKDIR(path);
+}
+
 static void saveInvoice(int t) {
   time_t now = time(NULL);
   struct tm *ti = localtime(&now);
   int invoiceId = gNextInvoiceId++;
   saveInvoiceId();
 
-  /* File hóa đơn chi tiết theo ngày */
-  char fn[64];
-  sprintf(fn, "hoadon_%02d_%02d_%04d.txt", ti->tm_mday, ti->tm_mon + 1, ti->tm_year + 1900);
+  /* File hóa đơn chi tiết theo ngày – lưu vào hoadon/YYYY/QX/MM/ */
+  ensureInvoiceDir(ti->tm_year + 1900, ti->tm_mon + 1);
+  char fn[128];
+  sprintf(fn, "hoadon/%04d/Q%d/%02d/hoadon_%02d_%02d_%04d.txt",
+          ti->tm_year + 1900, (ti->tm_mon) / 3 + 1, ti->tm_mon + 1,
+          ti->tm_mday, ti->tm_mon + 1, ti->tm_year + 1900);
   FILE *fp = fopen(fn, "a");
   if (fp) {
     fprintf(fp, "================================================================\n");
@@ -2136,7 +2157,7 @@ static void drawChangePw(void) {
   int px2=fx+28,pw2=fw-56;
   DrawTxtL("Mật khẩu hiện tại:",px2,fy+56,15.f,CT_MUTED);
   gInpPass[0]=true;
-  InputField((Rectangle){px2,fy+76,pw2,42},0,"Mật khẩu cũ...",14);
+  InputField((Rectangle){px2,fy+76,pw2,42},0,"Mật khẩu hiện tại...",14);
   DrawTxtL("Mật khẩu mới:",px2,fy+136,15.f,CT_MUTED);
   gInpPass[1]=true;
   InputField((Rectangle){px2,fy+156,pw2,42},1,"Mật khẩu mới...",14);
