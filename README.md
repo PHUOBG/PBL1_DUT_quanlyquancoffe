@@ -5,7 +5,7 @@ Báo cáo PBL1: https://docs.google.com/document/d/1P1yndqGHd1yx7etRuXIA63YqhSGm
 Người hướng dẫn: Ths. Nguyễn Thị Minh Hỷ
 
 Nhóm sinh viên thực hiện: 	
-Hoàng Thị Ngọc Phương 	102250190		25T_DT4 
-Lê Doãn Hồng Phúc       102250189		25T_DT4 
+Hoàng Thị Ngọc Phương 		25T_DT4 
+Lê Doãn Hồng Phúc      		25T_DT4 
 
 
